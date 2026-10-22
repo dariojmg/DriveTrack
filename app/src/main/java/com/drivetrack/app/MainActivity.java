@@ -3,6 +3,7 @@ import android.Manifest;import android.app.*;import android.os.*;import android.
 public class MainActivity extends Activity {
  final int bg=0xff0c131a,panel=0xff19242e,teal=0xff00ddb3;
  LinearLayout root,body;TextView gpsValue,distanceValue,driveTimeValue,currentLocationValue;
+ LinearLayout dashboardStats;
  Gauge gauge;boolean miles=false;int screen=0;
  Handler handler=new Handler();
  BroadcastReceiver receiver=new BroadcastReceiver(){public void onReceive(Context c,Intent i){if(screen==0)updateDashboard();}};
@@ -30,13 +31,14 @@ public class MainActivity extends Activity {
    return insets;
   });
   setContentView(root);root.requestApplyInsets();
-  TextView h=text("◉ DriveTrack   "+title,21,teal);root.addView(h);
-  ScrollView scroll=new ScrollView(this);body=new LinearLayout(this);body.setOrientation(1);body.setPadding(dp(12),0,dp(12),0);scroll.addView(body);
-  root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+  TextView h=text("◉ DriveTrack   "+title,18,teal);h.setPadding(dp(12),dp(4),dp(12),dp(4));root.addView(h);
+  body=new LinearLayout(this);body.setOrientation(1);body.setPadding(dp(10),0,dp(10),0);
+  if(title.equals("Dashboard"))root.addView(body,new LinearLayout.LayoutParams(-1,0,1));
+  else {ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.addView(body);root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));}
   LinearLayout nav=new LinearLayout(this);
   for(String label:new String[]{"Drive","History","Settings"}){
    Button b=new Button(this);b.setText(label);b.setAllCaps(false);b.setTextColor(teal);b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(panel));
-   nav.addView(b,new LinearLayout.LayoutParams(0,dp(58),1));
+   nav.addView(b,new LinearLayout.LayoutParams(0,dp(50),1));
    b.setOnClickListener(v->{if(label.equals("Drive"))showDashboard();else if(label.equals("History"))showHistory();else showSettings();});
   }root.addView(nav);
  }
@@ -50,40 +52,65 @@ public class MainActivity extends Activity {
  String duration(long ms){long m=Math.max(0,ms/60000);return String.format(Locale.getDefault(),"%02d:%02d",m/60,m%60);}
  String date(long ms){return new SimpleDateFormat("EEE, d MMM yyyy · HH:mm",Locale.getDefault()).format(new Date(ms));}
  void showDashboard(){
-  screen=0;init("Dashboard");gpsValue=card("GPS STATUS","Ready");
-  FrameLayout dial=new FrameLayout(this);
+  screen=0;init("Dashboard");
+  // Compact, bounded layout: the dial absorbs remaining screen height rather than making the page scroll.
+  LinearLayout gpsRow=new LinearLayout(this);gpsRow.setGravity(Gravity.CENTER_VERTICAL);
+  gpsRow.setPadding(dp(12),0,dp(12),0);gpsRow.setBackgroundColor(panel);
+  TextView gpsLabel=text("GPS",11,0xffa0b4c3);gpsRow.addView(gpsLabel);
+  gpsValue=text("Ready to start",14,0xffffffff);
+  gpsValue.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);
+  gpsRow.addView(gpsValue,new LinearLayout.LayoutParams(0,-1,1));
+  body.addView(gpsRow,new LinearLayout.LayoutParams(-1,dp(44)));
+  FrameLayout dial=new FrameLayout(this);dial.setClipChildren(false);
   gauge=new Gauge(this);dial.addView(gauge,new FrameLayout.LayoutParams(-1,-1));
-  LinearLayout controls=new LinearLayout(this);controls.setGravity(Gravity.CENTER);controls.setPadding(dp(18),0,dp(18),dp(4));
-  FrameLayout.LayoutParams cp=new FrameLayout.LayoutParams(-1,dp(64),Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL);dial.addView(controls,cp);
+  LinearLayout controls=new LinearLayout(this);controls.setGravity(Gravity.CENTER);
+  controls.setPadding(dp(10),0,dp(10),0);
+  FrameLayout.LayoutParams cp=new FrameLayout.LayoutParams(-1,dp(52),Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL);
+  dial.addView(controls,cp);
   if(!TrackingService.active){
-   Button start=journeyButton("▶ Start",0xff068b60);
-   LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(dp(168),dp(52));controls.addView(start,bp);
+   Button start=journeyButton("▶ Start",0xff078d62);
+   controls.addView(start,new LinearLayout.LayoutParams(dp(160),dp(48)));
    start.setOnClickListener(v->{
     if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=PackageManager.PERMISSION_GRANTED)
      requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_COARSE_LOCATION},42);
     else startJourney();
    });
   }else{
-   Button pause=journeyButton(TrackingService.paused?"▶ Resume":"Ⅱ Pause",0xffd1840a);
+   Button pause=journeyButton(TrackingService.paused?"▶ Resume":"Ⅱ Pause",0xffc77c0a);
    Button stop=journeyButton("■ Stop",0xffd93749);
-   LinearLayout.LayoutParams p1=new LinearLayout.LayoutParams(0,dp(52),1);p1.rightMargin=dp(10);
-   controls.addView(pause,p1);controls.addView(stop,new LinearLayout.LayoutParams(0,dp(52),1));
-   pause.setOnClickListener(v->{
-    startService(new Intent(this,TrackingService.class).setAction(TrackingService.paused?"RESUME":"PAUSE"));
-    handler.postDelayed(()->showDashboard(),180);
-   });
+   LinearLayout.LayoutParams p1=new LinearLayout.LayoutParams(0,dp(48),1);p1.rightMargin=dp(8);
+   controls.addView(pause,p1);controls.addView(stop,new LinearLayout.LayoutParams(0,dp(48),1));
+   pause.setOnClickListener(v->{startService(new Intent(this,TrackingService.class).setAction(TrackingService.paused?"RESUME":"PAUSE"));handler.postDelayed(()->showDashboard(),180);});
    stop.setOnClickListener(v->new AlertDialog.Builder(this).setTitle("End this journey?")
-    .setMessage("Your journey will be saved to History.")
-    .setNegativeButton("Keep driving",null)
-    .setPositiveButton("Save & stop",(d,which)->{
-     startService(new Intent(this,TrackingService.class).setAction("STOP"));
-     handler.postDelayed(()->showDashboard(),300);
-    }).show());
+    .setMessage("Your journey will be saved to History.").setNegativeButton("Keep driving",null)
+    .setPositiveButton("Save & stop",(d,which)->{startService(new Intent(this,TrackingService.class).setAction("STOP"));handler.postDelayed(()->showDashboard(),300);}).show());
   }
-  body.addView(dial,new LinearLayout.LayoutParams(-1,dp(320)));
-  distanceValue=card("DISTANCE","0.00 km");driveTimeValue=card("JOURNEY TIME","00:00");
-  currentLocationValue=card("CURRENT LOCATION","Waiting for GPS");
+  LinearLayout.LayoutParams dialParams=new LinearLayout.LayoutParams(-1,0,1);
+  dialParams.topMargin=dp(5);dialParams.bottomMargin=dp(6);
+  body.addView(dial,dialParams);
+  dashboardStats=new LinearLayout(this);dashboardStats.setOrientation(LinearLayout.HORIZONTAL);
+  distanceValue=compactCard(dashboardStats,"DISTANCE","0.00 km",true);
+  driveTimeValue=compactCard(dashboardStats,"JOURNEY TIME","00:00",false);
+  body.addView(dashboardStats,new LinearLayout.LayoutParams(-1,dp(83)));
+  LinearLayout where=new LinearLayout(this);where.setOrientation(LinearLayout.VERTICAL);
+  where.setBackgroundColor(panel);where.setPadding(dp(12),dp(5),dp(12),dp(4));
+  TextView placeLabel=text("CURRENT LOCATION",11,0xffa0b4c3);
+  placeLabel.setPadding(0,0,0,0);where.addView(placeLabel);
+  currentLocationValue=text("Waiting for GPS",16,0xffffffff);
+  currentLocationValue.setSingleLine(true);currentLocationValue.setEllipsize(android.text.TextUtils.TruncateAt.END);
+  currentLocationValue.setPadding(0,dp(3),0,0);where.addView(currentLocationValue);
+  LinearLayout.LayoutParams whereParams=new LinearLayout.LayoutParams(-1,dp(65));
+  whereParams.topMargin=dp(6);body.addView(where,whereParams);
   updateDashboard();
+ }
+ TextView compactCard(LinearLayout row,String label,String value,boolean first){
+  LinearLayout card=new LinearLayout(this);card.setOrientation(1);card.setBackgroundColor(panel);
+  card.setPadding(dp(9),dp(6),dp(5),dp(5));
+  TextView name=text(label,11,0xffa0b4c3);name.setPadding(0,0,0,dp(2));card.addView(name);
+  TextView number=text(value,23,0xffffffff);number.setSingleLine(true);number.setPadding(0,0,0,0);card.addView(number);
+  LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,-1,1);
+  if(first)lp.rightMargin=dp(5);else lp.leftMargin=dp(5);
+  row.addView(card,lp);return number;
  }
  Button journeyButton(String label,int color){Button b=new Button(this);b.setAllCaps(false);b.setText(label);b.setTextColor(0xffffffff);b.setTextSize(16);b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(color));return b;}
  void startJourney(){try{startForegroundService(new Intent(this,TrackingService.class));handler.postDelayed(()->showDashboard(),400);}
@@ -143,7 +170,10 @@ public class MainActivity extends Activity {
  class Gauge extends View{
   Paint p=new Paint(3);Gauge(Context c){super(c);}
   protected void onDraw(Canvas c){super.onDraw(c);
-   float w=getWidth(),h=getHeight(),cx=w/2,cy=h*.41f,r=Math.min(w*.40f,h*.43f);
+   float w=getWidth(),h=getHeight();
+   float usable=Math.max(dp(120),h-dp(53));
+   float cx=w/2,cy=usable*.54f;
+   float r=Math.max(dp(35),Math.min(w*.39f,Math.min(cy-dp(14),usable-cy-dp(9))));
    float display=(float)(TrackingService.currentSpeed*(miles?2.236936:3.6)),max=miles?120:200;
    p.setStyle(Paint.Style.STROKE);p.setStrokeCap(Paint.Cap.ROUND);p.setStrokeWidth(dp(10));p.setColor(panel);
    c.drawArc(cx-r,cy-r,cx+r,cy+r,140,260,false,p);
@@ -156,9 +186,9 @@ public class MainActivity extends Activity {
    double a=Math.toRadians(140+260*Math.min(1,Math.max(0,display/max)));
    p.setStrokeWidth(dp(4));p.setColor(0xffffffff);c.drawLine(cx,cy,cx+(r-dp(32))*(float)Math.cos(a),cy+(r-dp(32))*(float)Math.sin(a),p);
    p.setStyle(Paint.Style.FILL);p.setColor(teal);c.drawCircle(cx,cy,dp(7),p);
-   p.setTextAlign(Paint.Align.CENTER);p.setTextSize(dp(52));p.setColor(0xffffffff);c.drawText(""+Math.round(display),cx,cy+dp(52),p);
-   p.setTextSize(dp(16));p.setColor(0xffa0b4c3);c.drawText(miles?"mph":"km/h",cx,cy+dp(73),p);
-   p.setTextSize(dp(12));c.drawText("CURRENT SPEED",cx,cy-dp(42),p);
+   p.setTextAlign(Paint.Align.CENTER);p.setTextSize(Math.min(dp(43),r*.47f));p.setColor(0xffffffff);c.drawText(""+Math.round(display),cx,cy+Math.min(dp(47),r*.49f),p);
+   p.setTextSize(dp(16));p.setColor(0xffa0b4c3);c.drawText(miles?"mph":"km/h",cx,cy+Math.min(dp(67),r*.72f),p);
+   p.setTextSize(dp(12));c.drawText("CURRENT SPEED",cx,cy-Math.min(dp(38),r*.40f),p);
   }
  }
  class RouteView extends View{
