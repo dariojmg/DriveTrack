@@ -51,26 +51,48 @@ public class MainActivity extends Activity {
  String date(long ms){return new SimpleDateFormat("EEE, d MMM yyyy · HH:mm",Locale.getDefault()).format(new Date(ms));}
  void showDashboard(){
   screen=0;init("Dashboard");gpsValue=card("GPS STATUS","Ready");
-  gauge=new Gauge(this);body.addView(gauge,new LinearLayout.LayoutParams(-1,dp(290)));
+  FrameLayout dial=new FrameLayout(this);
+  gauge=new Gauge(this);dial.addView(gauge,new FrameLayout.LayoutParams(-1,-1));
+  LinearLayout controls=new LinearLayout(this);controls.setGravity(Gravity.CENTER);controls.setPadding(dp(18),0,dp(18),dp(4));
+  FrameLayout.LayoutParams cp=new FrameLayout.LayoutParams(-1,dp(64),Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL);dial.addView(controls,cp);
+  if(!TrackingService.active){
+   Button start=journeyButton("▶ Start",0xff068b60);
+   LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(dp(168),dp(52));controls.addView(start,bp);
+   start.setOnClickListener(v->{
+    if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=PackageManager.PERMISSION_GRANTED)
+     requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_COARSE_LOCATION},42);
+    else startJourney();
+   });
+  }else{
+   Button pause=journeyButton(TrackingService.paused?"▶ Resume":"Ⅱ Pause",0xffd1840a);
+   Button stop=journeyButton("■ Stop",0xffd93749);
+   LinearLayout.LayoutParams p1=new LinearLayout.LayoutParams(0,dp(52),1);p1.rightMargin=dp(10);
+   controls.addView(pause,p1);controls.addView(stop,new LinearLayout.LayoutParams(0,dp(52),1));
+   pause.setOnClickListener(v->{
+    startService(new Intent(this,TrackingService.class).setAction(TrackingService.paused?"RESUME":"PAUSE"));
+    handler.postDelayed(()->showDashboard(),180);
+   });
+   stop.setOnClickListener(v->new AlertDialog.Builder(this).setTitle("End this journey?")
+    .setMessage("Your journey will be saved to History.")
+    .setNegativeButton("Keep driving",null)
+    .setPositiveButton("Save & stop",(d,which)->{
+     startService(new Intent(this,TrackingService.class).setAction("STOP"));
+     handler.postDelayed(()->showDashboard(),300);
+    }).show());
+  }
+  body.addView(dial,new LinearLayout.LayoutParams(-1,dp(320)));
   distanceValue=card("DISTANCE","0.00 km");driveTimeValue=card("JOURNEY TIME","00:00");
   currentLocationValue=card("CURRENT LOCATION","Waiting for GPS");
-  Button action=new Button(this);action.setAllCaps(false);action.setText(TrackingService.active?"End Journey":"Start Journey");
-  action.setTextColor(0xffffffff);action.setBackgroundTintList(android.content.res.ColorStateList.valueOf(TrackingService.active?0xffe9434d:0xff008c73));
-  body.addView(action);action.setOnClickListener(v->{
-   if(TrackingService.active){
-    startService(new Intent(this,TrackingService.class).setAction("STOP"));handler.postDelayed(()->showDashboard(),400);
-   }else if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=PackageManager.PERMISSION_GRANTED){
-    requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_COARSE_LOCATION},42);
-   }else startJourney();
-  });updateDashboard();
+  updateDashboard();
  }
+ Button journeyButton(String label,int color){Button b=new Button(this);b.setAllCaps(false);b.setText(label);b.setTextColor(0xffffffff);b.setTextSize(16);b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(color));return b;}
  void startJourney(){try{startForegroundService(new Intent(this,TrackingService.class));handler.postDelayed(()->showDashboard(),400);}
   catch(Exception ex){new AlertDialog.Builder(this).setMessage("Could not start GPS tracking: "+ex.getMessage()).setPositiveButton("OK",null).show();}}
  void updateDashboard(){
   if(screen!=0)return;
-  if(gpsValue!=null)gpsValue.setText(TrackingService.active?(TrackingService.accuracy>0?"Recording · GPS ±"+(int)TrackingService.accuracy+" m":"Connecting to GPS"):"Ready to start");
+  if(gpsValue!=null)gpsValue.setText(TrackingService.active?(TrackingService.paused?"Journey paused":(TrackingService.accuracy>0?"Recording · GPS ±"+(int)TrackingService.accuracy+" m":"Connecting to GPS")):"Ready to start");
   if(distanceValue!=null)distanceValue.setText(dist(TrackingService.distance));
-  if(driveTimeValue!=null)driveTimeValue.setText(TrackingService.active?duration(System.currentTimeMillis()-TrackingService.started):"00:00");
+  if(driveTimeValue!=null)driveTimeValue.setText(TrackingService.active?duration(TrackingService.elapsedActiveMs()):"00:00");
   if(currentLocationValue!=null)currentLocationValue.setText(TrackingService.locationText);
   if(gauge!=null)gauge.invalidate();
  }
@@ -99,10 +121,10 @@ public class MainActivity extends Activity {
    long start=c.getLong(c.getColumnIndexOrThrow("started")),end=c.getLong(c.getColumnIndexOrThrow("ended")),moving=c.getLong(c.getColumnIndexOrThrow("movingms"));
    double d=c.getDouble(c.getColumnIndexOrThrow("distance")),max=c.getDouble(c.getColumnIndexOrThrow("maxspeed"));
    card("DATE",date(start));card("DISTANCE",dist(d));card("TOP SPEED",speed(max));
-   card("AVERAGE SPEED (INCLUDES STOPS)",speed(d/Math.max(1,(end-start)/1000.0)));
+   card("AVERAGE SPEED (INCLUDES STOPS)",speed(d/Math.max(1,(end-start-c.getLong(c.getColumnIndexOrThrow("pausedms")))/1000.0)));
    card("MOVING AVERAGE (ESTIMATE)",speed(d/Math.max(1,moving/1000.0)));
-   card("DURATION",duration(end-start));
-   card("STATIONARY TIME (ESTIMATE)",duration(Math.max(0,end-start-moving)));
+   card("DURATION",duration(end-start-c.getLong(c.getColumnIndexOrThrow("pausedms"))));
+   card("STATIONARY TIME (ESTIMATE)",duration(Math.max(0,end-start-c.getLong(c.getColumnIndexOrThrow("pausedms"))-moving)));
    JSONArray pts=new JSONArray(c.getString(c.getColumnIndexOrThrow("points")));
    body.addView(new RouteView(this,pts),new LinearLayout.LayoutParams(-1,dp(310)));
    card("ROUTE","GPS trace · "+pts.length()+" points (no street tiles)");
@@ -121,7 +143,7 @@ public class MainActivity extends Activity {
  class Gauge extends View{
   Paint p=new Paint(3);Gauge(Context c){super(c);}
   protected void onDraw(Canvas c){super.onDraw(c);
-   float w=getWidth(),h=getHeight(),cx=w/2,cy=h*.50f,r=Math.min(w*.40f,h*.43f);
+   float w=getWidth(),h=getHeight(),cx=w/2,cy=h*.41f,r=Math.min(w*.40f,h*.43f);
    float display=(float)(TrackingService.currentSpeed*(miles?2.236936:3.6)),max=miles?120:200;
    p.setStyle(Paint.Style.STROKE);p.setStrokeCap(Paint.Cap.ROUND);p.setStrokeWidth(dp(10));p.setColor(panel);
    c.drawArc(cx-r,cy-r,cx+r,cy+r,140,260,false,p);
@@ -134,8 +156,8 @@ public class MainActivity extends Activity {
    double a=Math.toRadians(140+260*Math.min(1,Math.max(0,display/max)));
    p.setStrokeWidth(dp(4));p.setColor(0xffffffff);c.drawLine(cx,cy,cx+(r-dp(32))*(float)Math.cos(a),cy+(r-dp(32))*(float)Math.sin(a),p);
    p.setStyle(Paint.Style.FILL);p.setColor(teal);c.drawCircle(cx,cy,dp(7),p);
-   p.setTextAlign(Paint.Align.CENTER);p.setTextSize(dp(52));p.setColor(0xffffffff);c.drawText(""+Math.round(display),cx,cy+dp(65),p);
-   p.setTextSize(dp(16));p.setColor(0xffa0b4c3);c.drawText(miles?"mph":"km/h",cx,cy+dp(86),p);
+   p.setTextAlign(Paint.Align.CENTER);p.setTextSize(dp(52));p.setColor(0xffffffff);c.drawText(""+Math.round(display),cx,cy+dp(52),p);
+   p.setTextSize(dp(16));p.setColor(0xffa0b4c3);c.drawText(miles?"mph":"km/h",cx,cy+dp(73),p);
    p.setTextSize(dp(12));c.drawText("CURRENT SPEED",cx,cy-dp(42),p);
   }
  }
