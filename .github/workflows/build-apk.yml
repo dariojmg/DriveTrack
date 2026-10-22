@@ -14,10 +14,15 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+      - name: Verify Android SDK
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          ls "$ANDROID_HOME/platforms" || true
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"
       - name: Compile debug APK
         run: |
           gradle --no-daemon assembleDebug
@@ -38,4 +43,4 @@ jobs:
           prerelease: true
           make_latest: true
           files: DriveTrack.apk
-          body: "Android beta build. Direct APK download; see README for installation and update caveats. Do not interact with the app while driving."
+          body: "Android beta build. This is debug-signed, and future install-over updates may require persistent signing. Do not interact with the app while driving."
