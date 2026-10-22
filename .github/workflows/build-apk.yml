@@ -1,0 +1,41 @@
+name: Build DriveTrack APK
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Compile debug APK
+        run: |
+          gradle --no-daemon assembleDebug
+          cp app/build/outputs/apk/debug/app-debug.apk DriveTrack.apk
+          test -s DriveTrack.apk
+      - name: Save APK as Actions artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DriveTrack-APK
+          path: DriveTrack.apk
+          retention-days: 90
+      - name: Publish direct APK download
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: beta-${{ github.run_number }}
+          name: DriveTrack beta ${{ github.run_number }}
+          prerelease: true
+          make_latest: true
+          files: DriveTrack.apk
+          body: "Android beta build. Direct APK download; see README for installation and update caveats. Do not interact with the app while driving."
