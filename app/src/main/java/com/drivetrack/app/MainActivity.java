@@ -16,7 +16,20 @@ public class MainActivity extends Activity {
  @Override public void onDestroy(){unregisterReceiver(receiver);super.onDestroy();}
  TextView text(String s,int size,int color){TextView t=new TextView(this);t.setText(s);t.setTextSize(size);t.setTextColor(color);t.setPadding(dp(10),dp(10),dp(10),dp(10));return t;}
  void init(String title){
-  root=new LinearLayout(this);root.setOrientation(1);root.setBackgroundColor(bg);setContentView(root);
+  root=new LinearLayout(this);root.setOrientation(1);root.setBackgroundColor(bg);
+  // Android 15+ draws apps edge-to-edge; keep the header and bottom tabs outside system bars.
+  root.setOnApplyWindowInsetsListener((view,insets)->{
+   int top,bottom;
+   if(Build.VERSION.SDK_INT>=30){
+    android.graphics.Insets bars=insets.getInsets(android.view.WindowInsets.Type.statusBars()|android.view.WindowInsets.Type.navigationBars());
+    top=bars.top;bottom=bars.bottom;
+   }else{
+    top=insets.getSystemWindowInsetTop();bottom=insets.getSystemWindowInsetBottom();
+   }
+   view.setPadding(0,top,0,bottom);
+   return insets;
+  });
+  setContentView(root);root.requestApplyInsets();
   TextView h=text("◉ DriveTrack   "+title,21,teal);root.addView(h);
   ScrollView scroll=new ScrollView(this);body=new LinearLayout(this);body.setOrientation(1);body.setPadding(dp(12),0,dp(12),0);scroll.addView(body);
   root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
