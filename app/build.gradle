@@ -1,13 +1,33 @@
 plugins { id 'com.android.application' }
+
+def driveSigning = new Properties()
+def signingPropertiesPath = System.getenv('DRIVETRACK_SIGNING_PROPERTIES')
+if (signingPropertiesPath && file(signingPropertiesPath).isFile()) {
+    file(signingPropertiesPath).withInputStream { stream -> driveSigning.load(stream) }
+}
+
 android {
- namespace 'com.drivetrack.app'
- compileSdk 35
- defaultConfig {
-  applicationId 'com.drivetrack.app'
-  minSdk 26
-  targetSdk 35
-  versionCode 5
-  versionName '0.5-beta'
- }
- buildTypes { release { minifyEnabled false } }
+    namespace 'com.drivetrack.app'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'com.drivetrack.app'
+        minSdk 26
+        targetSdk 35
+        versionCode 6
+        versionName '0.6-beta'
+    }
+    signingConfigs {
+        permanentRelease {
+            storeFile file(System.getenv('DRIVETRACK_KEYSTORE_PATH') ?: 'signing-not-configured.p12')
+            storePassword driveSigning.getProperty('storePassword', '')
+            keyAlias driveSigning.getProperty('keyAlias', 'drivetrack')
+            keyPassword driveSigning.getProperty('keyPassword', '')
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.permanentRelease
+        }
+    }
 }
