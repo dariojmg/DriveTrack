@@ -50,7 +50,7 @@ public class JourneyMapActivity extends Activity {
 
     LinearLayout bar=new LinearLayout(this);bar.setPadding(dp(10),dp(3),dp(10),dp(3));
     bar.setGravity(Gravity.CENTER_VERTICAL);
-    Button close=button("✕  Close",0xff223341);
+    Button close=button("← Back",0xff223341);
     bar.addView(close,new LinearLayout.LayoutParams(dp(100),dp(52)));
     close.setOnClickListener(v->finish());
     TextView label=new TextView(this);label.setText("Journey Map");label.setTextSize(17);
@@ -88,8 +88,13 @@ public class JourneyMapActivity extends Activity {
       +"const route=L.polyline(coords,{color:'#159cec',weight:5}).addTo(map);"
       +"L.circleMarker(coords[0],{color:'#00ddb3',fillColor:'#00ddb3',fillOpacity:1,radius:8}).addTo(map);"
       +"L.circleMarker(coords[coords.length-1],{color:'#ff536b',fillColor:'#ff536b',fillOpacity:1,radius:8}).addTo(map);"
-      +"window.resetRoute=function(){map.fitBounds(route.getBounds(),{padding:[26,26]});};"
-      +"window.resetRoute();setTimeout(()=>map.invalidateSize(),400);"
+      +"const bounds=route.getBounds();"
+      +"window.resetRoute=function(){map.invalidateSize({pan:false});if(bounds.isValid())map.fitBounds(bounds,{padding:[35,35],maxZoom:15,animate:false});};"
+      +"map.whenReady(function(){"
+      +"requestAnimationFrame(function(){window.resetRoute();});"
+      +"setTimeout(window.resetRoute,250);setTimeout(window.resetRoute,850);"
+      +"});"
+      +"window.addEventListener('resize',function(){setTimeout(window.resetRoute,150);});"
       +"</script></body></html>";
     web.loadDataWithBaseURL("https://appassets.androidplatform.net/",html,"text/html","UTF-8",null);
   }
