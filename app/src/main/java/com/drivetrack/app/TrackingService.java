@@ -77,7 +77,9 @@ public class TrackingService extends Service implements LocationListener {
   if(paused){pausedMs+=System.currentTimeMillis()-pausedAt;paused=false;pausedAt=0;}
   active=false;currentSpeed=0;
   try{lm.removeUpdates(this);}catch(Exception ignored){}
-  new TripStore(this).save(started,System.currentTimeMillis(),distance,maxSpeed,movingMs,pausedMs,points.toString(),telemetry.toString());
+  // Ignore accidental taps and journeys without meaningful GPS distance.
+  if(distance>=20&&points.length()>=3)
+   new TripStore(this).save(started,System.currentTimeMillis(),distance,maxSpeed,movingMs,pausedMs,points.toString(),telemetry.toString());
   getSharedPreferences("recovery",0).edit().clear().apply();
   distance=0;maxSpeed=0;currentSpeed=0;movingMs=0;accuracy=0;locationText="Waiting for GPS";lastFixTime=0;points=new JSONArray();telemetry=new JSONArray();last=null;lastAt=0;
   sendBroadcast(new Intent(UPDATE).setPackage(getPackageName()));
