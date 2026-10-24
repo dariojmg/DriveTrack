@@ -270,6 +270,19 @@ public class ModernActivity extends MainActivity {
   Button export=button("Export all journeys to JSON",surface);block(body,export,px(52),10);export.setOnClickListener(v->exportJourneys());
   Button restore=button("Restore journeys from .db backup",surface);block(body,restore,px(52),12);restore.setOnClickListener(v->importJourneys());
   block(body,label("GPS readings and journey history are stored on-device. Online maps load OpenStreetMap tiles. Exported files may contain precise locations.",13,muted),-2,18);
+  Button cleanup=button("Remove accidental zero-distance entries",surface);block(body,cleanup,px(50),10);
+  cleanup.setOnClickListener(v->{
+   try(TripStore db=new TripStore(this)){
+    int n=db.countEmpty();
+    if(n==0){Toast.makeText(this,"No empty journeys found",Toast.LENGTH_SHORT).show();return;}
+    new AlertDialog.Builder(this).setTitle("Remove "+n+" empty journeys?")
+     .setMessage("Only journeys under 20 metres will be removed. Export a backup first if needed.")
+     .setNegativeButton("Cancel",null).setPositiveButton("Remove",(d,w)->{
+      try(TripStore store=new TripStore(this)){store.deleteEmpty();}
+      showSettings();
+     }).show();
+   }
+  });
   Button delete=button("Delete all journeys",0xff713139);block(body,delete,px(48),12);
   delete.setOnClickListener(v->new AlertDialog.Builder(this).setTitle("Delete all journeys?")
    .setMessage("This permanently deletes stored journeys. Export a backup first.")
