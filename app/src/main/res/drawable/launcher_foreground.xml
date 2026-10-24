@@ -1,9 +1,15 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
  android:width="108dp" android:height="108dp"
  android:viewportWidth="108" android:viewportHeight="108">
- <path android:strokeColor="#00DDB3" android:strokeWidth="6" android:strokeLineCap="round"
-  android:pathData="M26,68 A28,28 0,1 1,82 68"/>
- <path android:fillColor="#FFFFFF" android:pathData="M54,51 L77,34 L59,58 Z"/>
- <path android:fillColor="#FFFFFF" android:pathData="M51,57h6v10h-6z"/>
- <path android:fillColor="#00DDB3" android:pathData="M50,76 L43,89 L54,83 L65,89 L58,76 Z"/>
+ <!-- Minimal DT monogram: angular letterforms, roadway cutout and speed arc -->
+ <path android:fillColor="#12DCD8"
+ android:pathData="M22,40 L47,40 C63,40 70,51 70,65 C70,80 60,89 45,89 L22,89 L22,75 L45,75 C54,75 57,72 57,65 C57,57 53,54 45,54 L22,54 Z"/>
+ <path android:fillColor="#008CD3" android:pathData="M22,75 L34,75 L34,89 L22,89 Z"/>
+ <path android:fillColor="#00E6DA" android:pathData="M62,40 L93,40 L93,53 L84,53 L84,89 L70,89 L70,53 L62,53 Z"/>
+ <path android:strokeColor="#00DAD3" android:strokeWidth="3.6" android:strokeLineCap="round"
+ android:pathData="M52,32 A29,29 0,0 1,90 35"/>
+ <path android:fillColor="#00F5EB" android:pathData="M74,34 L92,24 L81,39 Z"/>
+ <path android:fillColor="#08202A" android:pathData="M24,83 L45,58 L38,79 Z"/>
+ <path android:strokeColor="#A0FFFF" android:strokeWidth="1.8" android:strokeLineCap="round"
+ android:pathData="M26,84 Q42,69 45,63"/>
 </vector>
