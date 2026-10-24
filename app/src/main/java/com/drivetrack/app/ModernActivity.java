@@ -80,7 +80,9 @@ public class ModernActivity extends MainActivity {
   FrameLayout dial=new FrameLayout(this);
   gauge=new Gauge(this);dial.addView(gauge,new FrameLayout.LayoutParams(-1,-1));
   LinearLayout actions=new LinearLayout(this);actions.setGravity(Gravity.CENTER);
-  FrameLayout.LayoutParams frame=new FrameLayout.LayoutParams(-1,px(54),Gravity.BOTTOM);dial.addView(actions,frame);
+  // Anchor journey controls inside the lower speedometer region, not at the bottom of its tall container.
+  FrameLayout.LayoutParams frame=new FrameLayout.LayoutParams(-1,px(58),Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL);
+  frame.bottomMargin=px(38);dial.addView(actions,frame);
   if(!TrackingService.active){
    Button start=button("▶ Start journey",0xff078d62);actions.addView(start,new LinearLayout.LayoutParams(px(184),px(50)));
    start.setOnClickListener(v->{if(checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION)!=android.content.pm.PackageManager.PERMISSION_GRANTED)
