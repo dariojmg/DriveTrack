@@ -8,6 +8,7 @@ import android.database.Cursor;
 import android.content.Context;
 import android.view.*;
 import android.webkit.WebView;
+import android.webkit.WebViewClient;
 import android.webkit.WebSettings;
 import android.widget.*;
 import org.json.JSONArray;
@@ -79,6 +80,18 @@ public class JourneyMapActivity extends Activity {
     hint.setTextSize(12);hint.setTextColor(0xffaec1ca);hint.setGravity(Gravity.CENTER);
     root.addView(hint,new LinearLayout.LayoutParams(-1,dp(34)));
 
+    web.setWebViewClient(new WebViewClient(){
+      @Override public void onPageFinished(WebView view,String url){
+        // WebView and Leaflet measure their viewports at different times.
+        // Ensure the first usable frame always contains the whole route.
+        view.postDelayed(()->{
+          if(web==view) view.evaluateJavascript("if(window.fitRouteOnOpen){window.fitRouteOnOpen();}",null);
+        },200);
+        view.postDelayed(()->{
+          if(web==view) view.evaluateJavascript("if(window.fitRouteOnOpen){window.fitRouteOnOpen();}",null);
+        },750);
+      }
+    });
     String html="<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1,maximum-scale=1'>"
       +"<link rel='stylesheet' href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'>"
       +"<style>html,body,#map{margin:0;width:100%;height:100%;background:#192733}</style></head>"
@@ -89,12 +102,14 @@ public class JourneyMapActivity extends Activity {
       +"L.circleMarker(coords[0],{color:'#00ddb3',fillColor:'#00ddb3',fillOpacity:1,radius:8}).addTo(map);"
       +"L.circleMarker(coords[coords.length-1],{color:'#ff536b',fillColor:'#ff536b',fillOpacity:1,radius:8}).addTo(map);"
       +"const bounds=route.getBounds();"
-      +"window.resetRoute=function(){map.invalidateSize({pan:false});if(bounds.isValid())map.fitBounds(bounds,{padding:[35,35],maxZoom:15,animate:false});};"
-      +"map.whenReady(function(){"
-      +"requestAnimationFrame(function(){window.resetRoute();});"
-      +"setTimeout(window.resetRoute,250);setTimeout(window.resetRoute,850);"
-      +"});"
-      +"window.addEventListener('resize',function(){setTimeout(window.resetRoute,150);});"
+      +"let userInteracted=false;"
+      +"const el=document.getElementById('map');"
+      +"el.addEventListener('pointerdown',function(){userInteracted=true;},{passive:true});"
+      +"el.addEventListener('touchstart',function(){userInteracted=true;},{passive:true});"
+      +"window.resetRoute=function(){map.invalidateSize({pan:false});if(bounds.isValid()){map.fitBounds(bounds,{padding:[35,35],maxZoom:15,animate:false});}};"
+      +"window.fitRouteOnOpen=function(){if(!userInteracted)window.resetRoute();};"
+      +"window.resetRoute();"
+      +"setTimeout(window.fitRouteOnOpen,100);setTimeout(window.fitRouteOnOpen,450);"
       +"</script></body></html>";
     web.loadDataWithBaseURL("https://appassets.androidplatform.net/",html,"text/html","UTF-8",null);
   }
