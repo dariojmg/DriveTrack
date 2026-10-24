@@ -61,7 +61,7 @@ public class ModernActivity extends MainActivity {
   else{ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.addView(body);root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));}
   LinearLayout nav=new LinearLayout(this);nav.setPadding(px(10),px(3),px(10),px(5));
   for(String entry:new String[]{"◉  Drive","▤  History","⚙  Settings"}){
-   Button tab=button(entry,entry.contains(title.equals("Dashboard")?"Drive":title.equals("Settings")?"Settings":"History")?0xff19544d:surface);
+   Button tab=button(entry,entry.contains(title.equals("Dashboard")||title.equals("HUD")?"Drive":title.equals("Settings")?"Settings":"History")?0xff19544d:surface);
    tab.setTextColor(entry.contains(title.equals("Dashboard")?"Drive":title.equals("Settings")?"Settings":"History")?accent:muted);
    LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,px(49),1);lp.setMargins(px(2),0,px(2),0);nav.addView(tab,lp);
    tab.setOnClickListener(v->{hud=false;if(entry.contains("Drive"))showDashboard();else if(entry.contains("History"))showHistory();else showSettings();});
@@ -172,10 +172,36 @@ public class ModernActivity extends MainActivity {
      double max=c.getDouble(c.getColumnIndexOrThrow("maxspeed"));
      long time=c.getLong(c.getColumnIndexOrThrow("ended"))-start-c.getLong(c.getColumnIndexOrThrow("pausedms"));
      LinearLayout card=vertical();card.setPadding(px(14),px(12),px(14),px(12));card.setBackground(round(surface,15));
-     block(card,label(title+"    ›",17,-1),-2,7);
-     block(card,label(date(start)+"    ·    "+duration(time),12,muted),-2,9);
+     LinearLayout heading=new LinearLayout(this);heading.setGravity(Gravity.CENTER_VERTICAL);
+     TextView tripName=label(title,17,-1);tripName.setTypeface(null,1);
+     heading.addView(tripName,new LinearLayout.LayoutParams(0,-2,1));
+     TextView menu=label("⋮",25,muted);menu.setGravity(Gravity.CENTER);
+     menu.setContentDescription("Options for "+title);menu.setClickable(true);
+     heading.addView(menu,new LinearLayout.LayoutParams(px(44),px(42)));
+     block(card,heading,-2,2);
+     block(card,label(date(start)+"    ·    "+duration(time),12,muted),-2,7);
      block(card,label(dis+"     •     Max "+speed(max),14,accent),-2,0);
-     block(entries,card,-2,8);card.setOnClickListener(v->showDetail(id));
+     block(entries,card,-2,8);
+     card.setOnClickListener(v->showDetail(id));
+     menu.setOnClickListener(v->{
+      PopupMenu popup=new PopupMenu(this,menu);
+      popup.getMenu().add("View journey");
+      popup.getMenu().add("Rename / add notes");
+      popup.getMenu().add("Export GPX");
+      popup.getMenu().add("Export CSV");
+      popup.getMenu().add("Export JSON");
+      popup.getMenu().add("Delete journey");
+      final String editTitle=tripName.getText().toString(),editNotes=tripNotesFor(id);
+      popup.setOnMenuItemClickListener(item->{
+       String choice=item.getTitle().toString();
+       if(choice.equals("View journey"))showDetail(id);
+       else if(choice.equals("Rename / add notes"))editTrip(id,editTitle,editNotes);
+       else if(choice.startsWith("Export "))exportTrip(id,choice.substring(7));
+       else if(choice.equals("Delete journey"))confirmDeleteJourney(id);
+       return true;
+      });
+      popup.show();
+     });
     }
    }
    if(n==0)block(entries,label("No journeys for this month or search.",14,muted),-2,10);
@@ -220,8 +246,29 @@ public class ModernActivity extends MainActivity {
     Button b=button("Export "+kind,surface);exports.addView(b,new LinearLayout.LayoutParams(0,px(48),1));
     b.setOnClickListener(v->exportTrip(id,kind));
    }
-   block(body,exports,px(49),18);
+   block(body,exports,px(49),14);
+   Button remove=button("Delete this journey",0xff693039);
+   remove.setTextColor(0xffffc2c6);
+   block(body,remove,px(48),20);
+   remove.setOnClickListener(v->confirmDeleteJourney(id));
   }catch(Exception e){block(body,label("Could not load journey: "+e.getMessage(),14,muted),-2,0);}
+ }
+ String tripNotesFor(long id){
+  try(TripStore db=new TripStore(this);Cursor c=db.one(id)){
+   if(c.moveToFirst()){String notes=c.getString(c.getColumnIndexOrThrow("notes"));return notes==null?"":notes;}
+  }
+  return "";
+ }
+ void confirmDeleteJourney(long id){
+  new AlertDialog.Builder(this)
+   .setTitle("Delete this journey?")
+   .setMessage("This will permanently delete this journey and its GPS route. Other journeys will not be affected.")
+   .setNegativeButton("Cancel",null)
+   .setPositiveButton("Delete journey",(dialog,which)->{
+    try(TripStore db=new TripStore(this)){db.deleteOne(id);}
+    Toast.makeText(this,"Journey deleted",Toast.LENGTH_SHORT).show();
+    showHistory();
+   }).show();
  }
  void editTrip(long id,String title,String notes){
   LinearLayout form=vertical();form.setPadding(px(20),0,px(20),0);
