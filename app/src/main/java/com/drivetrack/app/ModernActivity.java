@@ -108,7 +108,7 @@ public class ModernActivity extends MainActivity {
  }
  @Override void updateDashboard(){
   if(screen==0){
-   if(gpsValue!=null)gpsValue.setText(!TrackingService.active?"○ Ready":TrackingService.paused?"Ⅱ Paused":TrackingService.accuracy<=10?"● Strong · ±"+(int)TrackingService.accuracy+" m":TrackingService.accuracy<=25?"● Fair · ±"+(int)TrackingService.accuracy+" m":TrackingService.accuracy>0?"○ Poor · ±"+(int)TrackingService.accuracy+" m":"○ Acquiring GPS");
+   if(gpsValue!=null)gpsValue.setText(!TrackingService.active?"○ Ready":TrackingService.paused?"Ⅱ Paused":TrackingService.lastFixTime>0&&System.currentTimeMillis()-TrackingService.lastFixTime>8000?"○ Signal lost":TrackingService.accuracy<=10&&TrackingService.lastFixTime>0?"● Strong · ±"+(int)TrackingService.accuracy+" m":TrackingService.accuracy<=25&&TrackingService.lastFixTime>0?"● Fair · ±"+(int)TrackingService.accuracy+" m":TrackingService.lastFixTime>0?"○ Poor · ±"+(int)TrackingService.accuracy+" m":"○ Acquiring GPS");
    if(distanceValue!=null)distanceValue.setText(dist(TrackingService.distance));
    if(driveTimeValue!=null)driveTimeValue.setText(TrackingService.active?duration(TrackingService.elapsedActiveMs()):"00:00");
    if(currentLocationValue!=null)currentLocationValue.setText(TrackingService.active?TrackingService.locationText:"Waiting for GPS");
