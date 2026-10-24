@@ -272,6 +272,13 @@ public class ModernActivity extends MainActivity {
    JSONArray coords=new JSONArray(c.getString(c.getColumnIndexOrThrow("points")));
    FrameLayout mapFrame=new FrameLayout(this);mapFrame.setBackground(round(surface,15));
    block(body,mapFrame,px(260),8);showStreetMap(mapFrame,coords);
+   // A transparent preview shield allows the parent page to scroll normally. Tap to explore.
+   View previewTap=new View(this);previewTap.setContentDescription("Expand journey map");
+   previewTap.setClickable(true);
+   mapFrame.addView(previewTap,new FrameLayout.LayoutParams(-1,-1));
+   previewTap.setOnClickListener(v->openFullMap(id));
+   Button expandMap=button("⛶  Expand interactive map",0xff17635b);
+   block(body,expandMap,px(46),8);expandMap.setOnClickListener(v->openFullMap(id));
    Button mapFallback=button("Show offline GPS trace",surface);block(body,mapFallback,px(42),12);
    mapFallback.setOnClickListener(v->{mapFrame.removeAllViews();mapFrame.addView(new RouteView(this,coords),new FrameLayout.LayoutParams(-1,-1));});
    twoStats(body,"DISTANCE",dist(metres),"TOP SPEED",speed(max));
@@ -311,6 +318,11 @@ public class ModernActivity extends MainActivity {
     Toast.makeText(this,"Journey deleted",Toast.LENGTH_SHORT).show();
     showHistory();
    }).show();
+ }
+ void openFullMap(long id){
+  Intent i=new Intent(this,JourneyMapActivity.class);
+  i.putExtra("journey_id",id);
+  startActivity(i);
  }
  void editTrip(long id,String title,String notes){
   LinearLayout form=vertical();form.setPadding(px(20),0,px(20),0);
