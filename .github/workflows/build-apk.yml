@@ -20,27 +20,44 @@ jobs:
       - name: Verify Android SDK
         run: |
           echo "ANDROID_HOME=$ANDROID_HOME"
-          ls "$ANDROID_HOME/platforms" || true
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"
-      - name: Compile debug APK
+      - name: Restore permanent signing certificate
+        env:
+          SIGNING_BUNDLE: ${{ secrets.DRIVETRACK_SIGNING_BUNDLE }}
         run: |
-          gradle --no-daemon assembleDebug
-          cp app/build/outputs/apk/debug/app-debug.apk DriveTrack.apk
+          if [ -z "$SIGNING_BUNDLE" ]; then
+            echo "::error::Missing DRIVETRACK_SIGNING_BUNDLE repository secret. Follow the private signing setup instructions."
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/drivetrack-signing"
+          printf '%s' "$SIGNING_BUNDLE" | base64 --decode > "$RUNNER_TEMP/drivetrack-signing.zip"
+          unzip -q "$RUNNER_TEMP/drivetrack-signing.zip" -d "$RUNNER_TEMP/drivetrack-signing"
+          test -s "$RUNNER_TEMP/drivetrack-signing/DriveTrack-release.p12"
+          test -s "$RUNNER_TEMP/drivetrack-signing/signing.properties"
+          rm -f "$RUNNER_TEMP/drivetrack-signing.zip"
+      - name: Compile permanently signed release APK
+        env:
+          DRIVETRACK_KEYSTORE_PATH: ${{ runner.temp }}/drivetrack-signing/DriveTrack-release.p12
+          DRIVETRACK_SIGNING_PROPERTIES: ${{ runner.temp }}/drivetrack-signing/signing.properties
+        run: |
+          gradle --no-daemon assembleRelease
+          cp app/build/outputs/apk/release/app-release.apk DriveTrack.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs DriveTrack.apk
           test -s DriveTrack.apk
-      - name: Save APK as Actions artifact
+      - name: Save signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: DriveTrack-APK
+          name: DriveTrack-APK-signed
           path: DriveTrack.apk
           retention-days: 90
-      - name: Publish direct APK download
-        if: github.event_name == 'push'
+      - name: Publish downloadable APK
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: beta-${{ github.run_number }}
-          name: DriveTrack beta ${{ github.run_number }}
+          name: DriveTrack permanently signed beta ${{ github.run_number }}
           prerelease: true
           make_latest: true
           files: DriveTrack.apk
-          body: "Android beta build. This is debug-signed, and future install-over updates may require persistent signing. Do not interact with the app while driving."
+          body: "DriveTrack permanently signed beta. Preserve signing backup for all future versions. v0.5 debug builds are NOT signature compatible. Back up and restore journey database during one-time migration."
