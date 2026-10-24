@@ -17,11 +17,11 @@ public class ModernActivity extends MainActivity {
  final int ink=0xff0c131a, surface=0xff192733, accent=0xff16dcb5,muted=0xff93a9b8;
  long selectedId=-1;int exportType=0;int monthOffset=0;String searchTerm="";boolean hud=false;
  static final int DETAIL_EXPORT=880;
- LinearLayout panelRoot; TextView digitalSpeed;
+ LinearLayout panelRoot; TextView digitalSpeed;boolean keepAwake=true;
  int px(int v){return (int)(v*getResources().getDisplayMetrics().density+.5f);}
  GradientDrawable round(int color,int radius){GradientDrawable g=new GradientDrawable();g.setColor(color);g.setCornerRadius(px(radius));return g;}
  TextView label(String t,int sp,int col){TextView v=new TextView(this);v.setText(t);v.setTextSize(sp);v.setTextColor(col);return v;}
- LinearLayout.LayoutParams margin(int height,int bottom){LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,height<0?height:px(height));p.bottomMargin=px(bottom);return p;}
+ LinearLayout.LayoutParams margin(int height,int bottom){LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,height<0?height:height);p.bottomMargin=px(bottom);return p;}
  LinearLayout vertical(){LinearLayout l=new LinearLayout(this);l.setOrientation(1);return l;}
  void block(LinearLayout parent,View v,int height,int gap){parent.addView(v,margin(height,gap));}
  void headerSmall(LinearLayout parent,String heading,String sub){
@@ -51,9 +51,9 @@ public class ModernActivity extends MainActivity {
   });
   setContentView(root);root.requestApplyInsets();
   LinearLayout header=new LinearLayout(this);header.setGravity(Gravity.CENTER_VERTICAL);header.setPadding(px(16),px(7),px(16),px(8));
-  TextView brand=label("◉ DriveTrack",19,accent);brand.setTypeface(null,1);header.addView(brand,new LinearLayout.LayoutParams(0,-2,1));
+  TextView brand=label("DT  DriveTrack",19,accent);brand.setTypeface(null,1);header.addView(brand,new LinearLayout.LayoutParams(0,-2,1));
   if(title.equals("Dashboard")){
-   TextView gps=label(TrackingService.active?(TrackingService.paused?"● PAUSED":"● RECORDING"):"● GPS READY",11,accent);header.addView(gps);
+   TextView gps=label(TrackingService.active?(TrackingService.paused?"Ⅱ PAUSED":TrackingService.lastFixTime>0?"● RECORDING":"○ ACQUIRING"):"○ WAITING FOR GPS",11,accent);header.addView(gps);
   }
   block(root,header,-2,0);
   body=vertical();body.setPadding(px(12),0,px(12),0);
@@ -76,7 +76,7 @@ public class ModernActivity extends MainActivity {
   LinearLayout signal=new LinearLayout(this);signal.setPadding(px(12),px(9),px(12),px(9));signal.setGravity(Gravity.CENTER_VERTICAL);signal.setBackground(round(surface,12));
   signal.addView(label("GPS SIGNAL",11,muted),new LinearLayout.LayoutParams(0,-2,1));
   gpsValue=label("Waiting for fix",13,-1);signal.addView(gpsValue);
-  block(body,signal,px(43),5);
+  block(body,signal,px(43),7);
   FrameLayout dial=new FrameLayout(this);
   gauge=new Gauge(this);dial.addView(gauge,new FrameLayout.LayoutParams(-1,-1));
   LinearLayout actions=new LinearLayout(this);actions.setGravity(Gravity.CENTER);
@@ -99,22 +99,31 @@ public class ModernActivity extends MainActivity {
   dashboardStats=new LinearLayout(this);
   distanceValue=compactCard(dashboardStats,"DISTANCE","0.00 km",true);
   driveTimeValue=compactCard(dashboardStats,"DURATION","00:00",false);
-  block(body,dashboardStats,px(79),7);
+  block(body,dashboardStats,px(83),8);
   LinearLayout place=tile("CURRENT LOCATION","Waiting for GPS");
   currentLocationValue=(TextView)place.getChildAt(1);currentLocationValue.setTextSize(14);currentLocationValue.setSingleLine(true);
   currentLocationValue.setEllipsize(android.text.TextUtils.TruncateAt.END);
-  block(body,place,px(68),8);
+  block(body,place,px(71),8);
   updateDashboard();
  }
  @Override void updateDashboard(){
+  updateScreenAwake();
   if(screen==0){
-   if(gpsValue!=null)gpsValue.setText(!TrackingService.active?"○ Ready":TrackingService.paused?"Ⅱ Paused":TrackingService.lastFixTime>0&&System.currentTimeMillis()-TrackingService.lastFixTime>8000?"○ Signal lost":TrackingService.accuracy<=10&&TrackingService.lastFixTime>0?"● Strong · ±"+(int)TrackingService.accuracy+" m":TrackingService.accuracy<=25&&TrackingService.lastFixTime>0?"● Fair · ±"+(int)TrackingService.accuracy+" m":TrackingService.lastFixTime>0?"○ Poor · ±"+(int)TrackingService.accuracy+" m":"○ Acquiring GPS");
+   if(gpsValue!=null)gpsValue.setText(!TrackingService.active?"○ Waiting for GPS":TrackingService.paused?"Ⅱ Paused":TrackingService.lastFixTime>0&&System.currentTimeMillis()-TrackingService.lastFixTime>8000?"○ Signal lost":TrackingService.accuracy<=10&&TrackingService.lastFixTime>0?"● Strong · ±"+(int)TrackingService.accuracy+" m":TrackingService.accuracy<=25&&TrackingService.lastFixTime>0?"● Fair · ±"+(int)TrackingService.accuracy+" m":TrackingService.lastFixTime>0?"○ Poor · ±"+(int)TrackingService.accuracy+" m":"○ Acquiring GPS");
    if(distanceValue!=null)distanceValue.setText(dist(TrackingService.distance));
    if(driveTimeValue!=null)driveTimeValue.setText(TrackingService.active?duration(TrackingService.elapsedActiveMs()):"00:00");
    if(currentLocationValue!=null)currentLocationValue.setText(TrackingService.active?TrackingService.locationText:"Waiting for GPS");
    if(gauge!=null)gauge.invalidate();
   }else if(screen==4&&digitalSpeed!=null)digitalSpeed.setText(String.valueOf(Math.round(TrackingService.currentSpeed*(miles?2.236936:3.6))));
  }
+ void updateScreenAwake(){
+  if(keepAwake&&TrackingService.active&&!TrackingService.paused&&(screen==0||screen==4)&&hasWindowFocus())
+   getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+  else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+ }
+ @Override protected void onResume(){super.onResume();keepAwake=getPreferences(0).getBoolean("keepAwake",true);updateScreenAwake();}
+ @Override protected void onPause(){getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);super.onPause();}
+ @Override public void onWindowFocusChanged(boolean hasFocus){super.onWindowFocusChanged(hasFocus);updateScreenAwake();}
  void showHud(){
   screen=4;init("HUD");
   TextView note=label("MINIMAL DRIVING MODE · stationary interaction only",11,muted);note.setGravity(Gravity.CENTER);block(body,note,-2,12);
@@ -253,6 +262,9 @@ public class ModernActivity extends MainActivity {
   screen=3;init("Settings");headerSmall(body,"Preferences","Keep DriveTrack simple and personal");
   Button units=button("Units: "+(miles?"Miles · mph":"Kilometres · km/h"),surface);block(body,units,px(52),10);
   units.setOnClickListener(v->{miles=!miles;getPreferences(0).edit().putBoolean("miles",miles).apply();showSettings();});
+  Button awake=button("Keep screen awake while recording: "+(getPreferences(0).getBoolean("keepAwake",true)?"ON":"OFF"),surface);
+  block(body,awake,px(52),10);
+  awake.setOnClickListener(v->{boolean value=!getPreferences(0).getBoolean("keepAwake",true);getPreferences(0).edit().putBoolean("keepAwake",value).apply();keepAwake=value;updateScreenAwake();showSettings();});
   Button display=button("Open minimal HUD speedometer",surface);block(body,display,px(52),10);
   display.setOnClickListener(v->{getPreferences(0).edit().putBoolean("hud",true).apply();showDashboard();});
   Button export=button("Export all journeys to JSON",surface);block(body,export,px(52),10);export.setOnClickListener(v->exportJourneys());
