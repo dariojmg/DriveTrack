@@ -68,7 +68,7 @@ public class ModernActivity extends MainActivity {
   }
   root.addView(nav);
  }
- LinearLayout roundJourneyControl(String symbol,String title,int color){
+ LinearLayout roundJourneyControl(int iconRes,String title,int color){
   GradientDrawable circle=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
    new int[]{lightenButton(color),color,darkenButton(color)});
   circle.setShape(GradientDrawable.OVAL);
@@ -81,9 +81,20 @@ public class ModernActivity extends MainActivity {
   control.setElevation(px(5));
   control.setClickable(true);
   control.setFocusable(true);
+  control.setOnTouchListener((v,event)->{
+   int action=event.getActionMasked();
+   if(action==MotionEvent.ACTION_DOWN){
+    v.animate().scaleX(.91f).scaleY(.91f).translationZ(-px(2)).setDuration(105).start();
+   }else if(action==MotionEvent.ACTION_UP||action==MotionEvent.ACTION_CANCEL){
+    v.animate().scaleX(1f).scaleY(1f).translationZ(0).setDuration(140).start();
+   }
+   return false;
+  });
   control.setContentDescription(title.equals("START")?"Start journey":title.equals("STOP")?"Stop and save journey":title+" journey");
-  TextView glyph=label(symbol,32,0xffffffff);glyph.setGravity(Gravity.CENTER);glyph.setIncludeFontPadding(false);
-  control.addView(glyph,new LinearLayout.LayoutParams(-1,px(39)));
+  ImageView glyph=new ImageView(this);
+  glyph.setImageResource(iconRes);
+  glyph.setScaleType(ImageView.ScaleType.FIT_CENTER);
+  control.addView(glyph,new LinearLayout.LayoutParams(px(30),px(39)));
   TextView caption=label(title,11,0xffffffff);caption.setTypeface(null,1);caption.setLetterSpacing(.05f);caption.setGravity(Gravity.CENTER);
   control.addView(caption,new LinearLayout.LayoutParams(-1,px(21)));
   return control;
@@ -104,16 +115,16 @@ public class ModernActivity extends MainActivity {
   LinearLayout actions=new LinearLayout(this);actions.setGravity(Gravity.CENTER);
   // Center round console-style controls beneath the dial, consistently in every journey state.
   FrameLayout.LayoutParams frame=new FrameLayout.LayoutParams(-1,px(100),Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL);
-  frame.bottomMargin=px(57);dial.addView(actions,frame);
+  frame.bottomMargin=px(31);dial.addView(actions,frame);
   if(!TrackingService.active){
-   LinearLayout start=roundJourneyControl("⏻","START",0xff078c62);
+   LinearLayout start=roundJourneyControl(R.drawable.ic_drive_start,"START",0xff078c62);
    actions.addView(start,new LinearLayout.LayoutParams(px(94),px(94)));
    start.setOnClickListener(v->{if(checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION)!=android.content.pm.PackageManager.PERMISSION_GRANTED)
     requestPermissions(new String[]{android.Manifest.permission.ACCESS_FINE_LOCATION,android.Manifest.permission.ACCESS_COARSE_LOCATION},42);
     else startJourney();});
   }else{
-   LinearLayout pause=roundJourneyControl(TrackingService.paused?"▶":"Ⅱ",TrackingService.paused?"RESUME":"PAUSE",0xffd58a12);
-   LinearLayout stop=roundJourneyControl("■","STOP",0xffd63e47);
+   LinearLayout pause=roundJourneyControl(TrackingService.paused?R.drawable.ic_drive_resume:R.drawable.ic_drive_pause,TrackingService.paused?"RESUME":"PAUSE",0xffd58a12);
+   LinearLayout stop=roundJourneyControl(R.drawable.ic_drive_stop,"STOP",0xffd63e47);
    LinearLayout.LayoutParams left=new LinearLayout.LayoutParams(px(94),px(94));left.rightMargin=px(14);
    actions.addView(pause,left);actions.addView(stop,new LinearLayout.LayoutParams(px(94),px(94)));
    pause.setOnClickListener(v->{startService(new Intent(this,TrackingService.class).setAction(TrackingService.paused?"RESUME":"PAUSE"));handler.postDelayed(()->showDashboard(),200);});
