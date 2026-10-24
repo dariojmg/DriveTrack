@@ -68,6 +68,28 @@ public class ModernActivity extends MainActivity {
   }
   root.addView(nav);
  }
+ LinearLayout roundJourneyControl(String symbol,String title,int color){
+  GradientDrawable circle=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+   new int[]{lightenButton(color),color,darkenButton(color)});
+  circle.setShape(GradientDrawable.OVAL);
+  circle.setStroke(px(2),0x88ffffff);
+  android.graphics.drawable.RippleDrawable ripple=new android.graphics.drawable.RippleDrawable(
+    ColorStateList.valueOf(0x66ffffff),circle,null);
+  LinearLayout control=vertical();
+  control.setGravity(Gravity.CENTER);
+  control.setBackground(ripple);
+  control.setElevation(px(5));
+  control.setClickable(true);
+  control.setFocusable(true);
+  control.setContentDescription(title.equals("START")?"Start journey":title.equals("STOP")?"Stop and save journey":title+" journey");
+  TextView glyph=label(symbol,32,0xffffffff);glyph.setGravity(Gravity.CENTER);glyph.setIncludeFontPadding(false);
+  control.addView(glyph,new LinearLayout.LayoutParams(-1,px(39)));
+  TextView caption=label(title,11,0xffffffff);caption.setTypeface(null,1);caption.setLetterSpacing(.05f);caption.setGravity(Gravity.CENTER);
+  control.addView(caption,new LinearLayout.LayoutParams(-1,px(21)));
+  return control;
+ }
+ int lightenButton(int color){return Color.rgb(Math.min(255,Color.red(color)+34),Math.min(255,Color.green(color)+34),Math.min(255,Color.blue(color)+34));}
+ int darkenButton(int color){return Color.rgb((int)(Color.red(color)*.74),(int)(Color.green(color)*.74),(int)(Color.blue(color)*.74));}
  @Override void showDashboard(){
   screen=0;
   hud=getPreferences(0).getBoolean("hud",false);
@@ -80,18 +102,20 @@ public class ModernActivity extends MainActivity {
   FrameLayout dial=new FrameLayout(this);
   gauge=new Gauge(this);dial.addView(gauge,new FrameLayout.LayoutParams(-1,-1));
   LinearLayout actions=new LinearLayout(this);actions.setGravity(Gravity.CENTER);
-  // Anchor journey controls inside the lower speedometer region, not at the bottom of its tall container.
-  FrameLayout.LayoutParams frame=new FrameLayout.LayoutParams(-1,px(58),Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL);
-  frame.bottomMargin=px(38);dial.addView(actions,frame);
+  // Center round console-style controls beneath the dial, consistently in every journey state.
+  FrameLayout.LayoutParams frame=new FrameLayout.LayoutParams(-1,px(100),Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL);
+  frame.bottomMargin=px(57);dial.addView(actions,frame);
   if(!TrackingService.active){
-   Button start=button("▶ Start journey",0xff078d62);actions.addView(start,new LinearLayout.LayoutParams(px(184),px(50)));
+   LinearLayout start=roundJourneyControl("⏻","START",0xff078c62);
+   actions.addView(start,new LinearLayout.LayoutParams(px(94),px(94)));
    start.setOnClickListener(v->{if(checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION)!=android.content.pm.PackageManager.PERMISSION_GRANTED)
     requestPermissions(new String[]{android.Manifest.permission.ACCESS_FINE_LOCATION,android.Manifest.permission.ACCESS_COARSE_LOCATION},42);
     else startJourney();});
   }else{
-   Button pause=button(TrackingService.paused?"▶ Resume":"Ⅱ Pause",0xffbe760a);
-   Button stop=button("■ Stop",0xffd23c4b);
-   LinearLayout.LayoutParams half=new LinearLayout.LayoutParams(0,px(50),1);half.rightMargin=px(7);actions.addView(pause,half);actions.addView(stop,new LinearLayout.LayoutParams(0,px(50),1));
+   LinearLayout pause=roundJourneyControl(TrackingService.paused?"▶":"Ⅱ",TrackingService.paused?"RESUME":"PAUSE",0xffd58a12);
+   LinearLayout stop=roundJourneyControl("■","STOP",0xffd63e47);
+   LinearLayout.LayoutParams left=new LinearLayout.LayoutParams(px(94),px(94));left.rightMargin=px(14);
+   actions.addView(pause,left);actions.addView(stop,new LinearLayout.LayoutParams(px(94),px(94)));
    pause.setOnClickListener(v->{startService(new Intent(this,TrackingService.class).setAction(TrackingService.paused?"RESUME":"PAUSE"));handler.postDelayed(()->showDashboard(),200);});
    stop.setOnClickListener(v->new AlertDialog.Builder(this).setTitle("Save this journey?")
     .setMessage("The trip will be saved to History and the dashboard will reset.")
