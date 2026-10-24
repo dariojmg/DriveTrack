@@ -7,6 +7,7 @@
  <uses-permission android:name="android.permission.INTERNET"/>
  <application android:label="DriveTrack" android:theme="@android:style/Theme.Material.NoActionBar" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher" android:usesCleartextTraffic="false">
   <activity android:name=".ModernActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity>
+  <activity android:name=".JourneyMapActivity" android:exported="false"/>
   <activity android:name=".MainActivity" android:exported="false"/>
   <service android:name=".TrackingService" android:exported="false" android:foregroundServiceType="location"/>
  </application>
