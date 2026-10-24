@@ -5,6 +5,7 @@ public class MainActivity extends Activity {
  LinearLayout root,body;TextView gpsValue,distanceValue,driveTimeValue,currentLocationValue;
  LinearLayout dashboardStats;
  Gauge gauge;boolean miles=false;int screen=0;
+ static final int EXPORT_REQUEST=781;
  Handler handler=new Handler();
  BroadcastReceiver receiver=new BroadcastReceiver(){public void onReceive(Context c,Intent i){if(screen==0)updateDashboard();}};
  int dp(float v){return (int)(getResources().getDisplayMetrics().density*v+.5f);}
@@ -127,8 +128,25 @@ public class MainActivity extends Activity {
   if(req==42&&results.length>0&&results[0]==PackageManager.PERMISSION_GRANTED)startJourney();
   else if(req==42)new AlertDialog.Builder(this).setMessage("Precise location is needed to track distance and speed.").setPositiveButton("OK",null).show();
  }
+ void exportJourneys(){
+  Intent save=new Intent(Intent.ACTION_CREATE_DOCUMENT);
+  save.addCategory(Intent.CATEGORY_OPENABLE);save.setType("application/json");
+  save.putExtra(Intent.EXTRA_TITLE,"DriveTrack-journeys.json");
+  try{startActivityForResult(save,EXPORT_REQUEST);}
+  catch(Exception e){new AlertDialog.Builder(this).setMessage("Unable to open Android save dialog: "+e.getMessage()).setPositiveButton("OK",null).show();}
+ }
+ @Override protected void onActivityResult(int request,int result,Intent data){
+  super.onActivityResult(request,result,data);
+  if(request!=EXPORT_REQUEST||result!=RESULT_OK||data==null||data.getData()==null)return;
+  try(TripStore store=new TripStore(this);java.io.OutputStream out=getContentResolver().openOutputStream(data.getData())){
+   if(out==null)throw new java.io.IOException("File not writable");
+   byte[] bytes=store.exportAll().toString(2).getBytes(java.nio.charset.StandardCharsets.UTF_8);
+   out.write(bytes);out.flush();
+   Toast.makeText(this,"Journeys exported. Upload the JSON file to ChatGPT.",Toast.LENGTH_LONG).show();
+  }catch(Exception e){new AlertDialog.Builder(this).setMessage("Export failed: "+e.getMessage()).setPositiveButton("OK",null).show();}
+ }
  void showHistory(){
-  screen=1;init("Journey History");try(TripStore store=new TripStore(this);Cursor c=store.all()){
+  screen=1;init("Journey History");Button export=new Button(this);export.setAllCaps(false);export.setText("Export all journeys · JSON");body.addView(export);export.setOnClickListener(v->exportJourneys());try(TripStore store=new TripStore(this);Cursor c=store.all()){
    int count=0;double total=0;while(c.moveToNext()){count++;total+=c.getDouble(c.getColumnIndexOrThrow("distance"));}
    card("TOTAL · "+count+" journeys",dist(total));c.moveToPosition(-1);
    if(count==0)card("NO JOURNEYS YET","Start your first journey from Drive.");
@@ -153,19 +171,43 @@ public class MainActivity extends Activity {
    card("DURATION",duration(end-start-c.getLong(c.getColumnIndexOrThrow("pausedms"))));
    card("STATIONARY TIME (ESTIMATE)",duration(Math.max(0,end-start-c.getLong(c.getColumnIndexOrThrow("pausedms"))-moving)));
    JSONArray pts=new JSONArray(c.getString(c.getColumnIndexOrThrow("points")));
-   body.addView(new RouteView(this,pts),new LinearLayout.LayoutParams(-1,dp(310)));
-   card("ROUTE","GPS trace · "+pts.length()+" points (no street tiles)");
+   card("ROUTE MAP","Street map (internet needed) · "+pts.length()+" points");
+   FrameLayout mapFrame=new FrameLayout(this);
+   body.addView(mapFrame,new LinearLayout.LayoutParams(-1,dp(310)));
+   showStreetMap(mapFrame,pts);
+   Button offline=new Button(this);offline.setAllCaps(false);offline.setText("Show GPS trace without map");
+   body.addView(offline);
+   offline.setOnClickListener(v->{mapFrame.removeAllViews();mapFrame.addView(new RouteView(this,pts),new FrameLayout.LayoutParams(-1,-1));offline.setEnabled(false);});
   }catch(Exception e){card("Details unavailable",String.valueOf(e.getMessage()));}
  }
  void showSettings(){
   screen=3;init("Settings");
   Button units=new Button(this);units.setAllCaps(false);units.setText("Units: "+(miles?"mph and miles":"km/h and kilometres"));
   body.addView(units);units.setOnClickListener(v->{miles=!miles;getPreferences(0).edit().putBoolean("miles",miles).apply();showSettings();});
-  card("PRIVACY","Journey records and GPS coordinates stay on your phone.");
+  Button export=new Button(this);export.setText("Export journeys to JSON");body.addView(export);export.setOnClickListener(v->exportJourneys());
+  card("PRIVACY","Journeys stay on this phone. Export shares them only when you choose. Route maps request map tiles from OpenStreetMap.");
   card("TRACKING","Uses a foreground GPS service and persistent Android notification.");
   Button delete=new Button(this);delete.setText("Delete all saved journeys");body.addView(delete);
   delete.setOnClickListener(v->new AlertDialog.Builder(this).setTitle("Delete all saved journeys?")
    .setMessage("This cannot be undone.").setNegativeButton("Cancel",null).setPositiveButton("Delete",(d,w)->{new TripStore(this).deleteAll();showHistory();}).show());
+ }
+ void showStreetMap(FrameLayout frame,JSONArray pts){
+  if(pts.length()<2){frame.addView(new RouteView(this,pts),new FrameLayout.LayoutParams(-1,-1));return;}
+  android.webkit.WebView map=new android.webkit.WebView(this);
+  map.setBackgroundColor(panel);map.getSettings().setJavaScriptEnabled(true);
+  frame.addView(map,new FrameLayout.LayoutParams(-1,-1));
+  String html="<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1'>"
+    +"<link rel='stylesheet' href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'>"
+    +"<style>html,body,#map{margin:0;height:100%;width:100%;background:#19242e}</style></head>"
+    +"<body><div id='map'></div><script src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'></script><script>"
+    +"const coords="+pts.toString()+";const map=L.map('map');"
+    +"L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap contributors'}).addTo(map);"
+    +"let line=L.polyline(coords,{color:'#149cf2',weight:5}).addTo(map);"
+    +"L.circleMarker(coords[0],{color:'#00ddb3',fillColor:'#00ddb3',fillOpacity:1,radius:8}).addTo(map);"
+    +"L.circleMarker(coords[coords.length-1],{color:'#ff536b',fillColor:'#ff536b',fillOpacity:1,radius:8}).addTo(map);"
+    +"map.fitBounds(line.getBounds(),{padding:[20,20]});"
+    +"</script></body></html>";
+  map.loadDataWithBaseURL("https://appassets.androidplatform.net/",html,"text/html","UTF-8",null);
  }
  class Gauge extends View{
   Paint p=new Paint(3);Gauge(Context c){super(c);}
