@@ -225,6 +225,11 @@ public class ModernActivity extends MainActivity {
    String notes=c.getString(c.getColumnIndexOrThrow("notes"));if(notes==null)notes="";
    final String origTitle=tripTitle,origNotes=notes;
    headerSmall(body,tripTitle,date(started));
+   if(!notes.trim().isEmpty()){
+    LinearLayout noteCard=tile("NOTES",notes);
+    ((TextView)noteCard.getChildAt(1)).setTextSize(14);
+    block(body,noteCard,-2,10);
+   }
    Button edit=button("✎  Rename / add notes",surface);block(body,edit,px(46),10);
    edit.setOnClickListener(v->editTrip(id,origTitle,origNotes));
    JSONArray coords=new JSONArray(c.getString(c.getColumnIndexOrThrow("points")));
@@ -239,7 +244,7 @@ public class ModernActivity extends MainActivity {
    twoStats(body,"PAUSED",duration(pause),"GPS POINTS",String.valueOf(coords.length()));
    String telemetry=c.getString(c.getColumnIndexOrThrow("telemetry"));
    try{JSONArray samples=new JSONArray(telemetry==null?"[]":telemetry);
-    block(body,label("GPS diagnostics: "+samples.length()+" speed samples",13,muted),-2,9);
+    block(body,label(samples.length()==0?"GPS diagnostics unavailable for this older journey":"GPS diagnostics: "+samples.length()+" speed samples",13,muted),-2,9);
    }catch(Exception ignored){}
    LinearLayout exports=new LinearLayout(this);
    for(String kind:new String[]{"GPX","CSV","JSON"}){
