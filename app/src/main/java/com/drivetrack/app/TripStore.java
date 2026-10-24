@@ -70,6 +70,8 @@ public class TripStore extends SQLiteOpenHelper {
   ContentValues c=new ContentValues();c.put("title",title);c.put("notes",notes);
   getWritableDatabase().update("trips",c,"id=?",new String[]{String.valueOf(id)});
  }
+ public int countEmpty(){try(Cursor c=getReadableDatabase().rawQuery("SELECT COUNT(*) FROM trips WHERE distance<20",null)){return c.moveToFirst()?c.getInt(0):0;}}
+ public int deleteEmpty(){return getWritableDatabase().delete("trips","distance<20",null);}
  public void deleteOne(long id){getWritableDatabase().delete("trips","id=?",new String[]{String.valueOf(id)});}
  public void deleteAll(){getWritableDatabase().delete("trips",null,null);}
 }
