@@ -27,5 +27,44 @@ public class TripStore extends SQLiteOpenHelper {
   }
   root.put("journeys",journeys);return root;
  }
+ public int importDatabase(Context context,android.net.Uri uri) throws Exception {
+  java.io.File tmp=java.io.File.createTempFile("drivetrack-import-", ".db",context.getCacheDir());
+  try {
+   try(java.io.InputStream in=context.getContentResolver().openInputStream(uri);
+       java.io.FileOutputStream out=new java.io.FileOutputStream(tmp)){
+    if(in==null)throw new java.io.IOException("Backup not accessible");
+    byte[] buffer=new byte[16384];int count;long total=0;
+    while((count=in.read(buffer))!=-1){total+=count;if(total>100*1024*1024)throw new java.io.IOException("Backup exceeds 100 MB");out.write(buffer,0,count);}
+   }
+   int imported=0;
+   try(SQLiteDatabase source=SQLiteDatabase.openDatabase(tmp.getAbsolutePath(),null,SQLiteDatabase.OPEN_READONLY);
+       Cursor verify=source.rawQuery("PRAGMA integrity_check",null)){
+    if(!verify.moveToFirst()||!"ok".equalsIgnoreCase(verify.getString(0)))throw new java.io.IOException("SQLite backup failed integrity check");
+    try(Cursor rows=source.rawQuery("SELECT started,ended,distance,maxspeed,movingms,pausedms,points FROM trips ORDER BY started",null)){
+     SQLiteDatabase destination=getWritableDatabase();
+     destination.beginTransaction();
+     try {
+      while(rows.moveToNext()){
+       long start=rows.getLong(0),end=rows.getLong(1);
+       if(start<=0||end<start)throw new java.io.IOException("Invalid timestamps in backup");
+       String pts=rows.getString(6);
+       new org.json.JSONArray(pts==null?"[]":pts);
+       try(Cursor existing=destination.rawQuery("SELECT 1 FROM trips WHERE started=? AND ended=? LIMIT 1",new String[]{String.valueOf(start),String.valueOf(end)})){
+        if(existing.moveToFirst())continue;
+       }
+       ContentValues v=new ContentValues();
+       v.put("started",start);v.put("ended",end);
+       v.put("distance",rows.getDouble(2));v.put("maxspeed",rows.getDouble(3));
+       v.put("movingms",rows.getLong(4));v.put("pausedms",rows.getLong(5));
+       v.put("points",pts);v.put("telemetry","[]");
+       if(destination.insertOrThrow("trips",null,v)>0)imported++;
+      }
+      destination.setTransactionSuccessful();
+     }finally{destination.endTransaction();}
+    }
+   }
+   return imported;
+  }finally{tmp.delete();}
+ }
  public void deleteAll(){getWritableDatabase().delete("trips",null,null);}
 }
