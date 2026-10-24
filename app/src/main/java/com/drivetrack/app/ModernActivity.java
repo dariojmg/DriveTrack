@@ -124,6 +124,7 @@ public class ModernActivity extends MainActivity {
   Button back=button("Return to dashboard",surface);block(body,back,px(50),12);
   back.setOnClickListener(v->{getPreferences(0).edit().putBoolean("hud",false).apply();hud=false;showDashboard();});
   updateDashboard();
+  handler.postDelayed(new Runnable(){public void run(){if(screen==4){updateDashboard();handler.postDelayed(this,1000);}}},1000);
  }
  @Override void showHistory(){
   screen=1;init("History");headerSmall(body,"Your journeys","All your drives, organised by date");
