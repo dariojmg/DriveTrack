@@ -5,7 +5,7 @@ public class MainActivity extends Activity {
  LinearLayout root,body;TextView gpsValue,distanceValue,driveTimeValue,currentLocationValue;
  LinearLayout dashboardStats;
  Gauge gauge;boolean miles=false;int screen=0;
- static final int EXPORT_REQUEST=781;
+ static final int EXPORT_REQUEST=781,IMPORT_REQUEST=782;
  Handler handler=new Handler();
  BroadcastReceiver receiver=new BroadcastReceiver(){public void onReceive(Context c,Intent i){if(screen==0)updateDashboard();}};
  int dp(float v){return (int)(getResources().getDisplayMetrics().density*v+.5f);}
@@ -128,6 +128,13 @@ public class MainActivity extends Activity {
   if(req==42&&results.length>0&&results[0]==PackageManager.PERMISSION_GRANTED)startJourney();
   else if(req==42)new AlertDialog.Builder(this).setMessage("Precise location is needed to track distance and speed.").setPositiveButton("OK",null).show();
  }
+ void importJourneys(){
+  if(TrackingService.active){Toast.makeText(this,"Stop the current journey before restoring a backup.",Toast.LENGTH_LONG).show();return;}
+  Intent pick=new Intent(Intent.ACTION_OPEN_DOCUMENT);
+  pick.addCategory(Intent.CATEGORY_OPENABLE);pick.setType("*/*");
+  try{startActivityForResult(pick,IMPORT_REQUEST);}
+  catch(Exception e){new AlertDialog.Builder(this).setMessage("Cannot open the file picker: "+e.getMessage()).setPositiveButton("OK",null).show();}
+ }
  void exportJourneys(){
   Intent save=new Intent(Intent.ACTION_CREATE_DOCUMENT);
   save.addCategory(Intent.CATEGORY_OPENABLE);save.setType("application/json");
@@ -137,7 +144,19 @@ public class MainActivity extends Activity {
  }
  @Override protected void onActivityResult(int request,int result,Intent data){
   super.onActivityResult(request,result,data);
-  if(request!=EXPORT_REQUEST||result!=RESULT_OK||data==null||data.getData()==null)return;
+  if(result!=RESULT_OK||data==null||data.getData()==null)return;
+  if(request==IMPORT_REQUEST){
+   try(TripStore store=new TripStore(this)){
+    int restored=store.importDatabase(this,data.getData());
+    new AlertDialog.Builder(this).setTitle("Backup restored")
+     .setMessage(restored+" journeys imported. Existing duplicates were skipped.")
+     .setPositiveButton("View history",(d,w)->showHistory()).show();
+   }catch(Exception e){new AlertDialog.Builder(this).setTitle("Import failed")
+      .setMessage("Your existing journeys are unchanged. "+e.getMessage())
+      .setPositiveButton("OK",null).show();}
+   return;
+  }
+  if(request!=EXPORT_REQUEST)return;
   try(TripStore store=new TripStore(this);java.io.OutputStream out=getContentResolver().openOutputStream(data.getData())){
    if(out==null)throw new java.io.IOException("File not writable");
    byte[] bytes=store.exportAll().toString(2).getBytes(java.nio.charset.StandardCharsets.UTF_8);
@@ -185,6 +204,7 @@ public class MainActivity extends Activity {
   Button units=new Button(this);units.setAllCaps(false);units.setText("Units: "+(miles?"mph and miles":"km/h and kilometres"));
   body.addView(units);units.setOnClickListener(v->{miles=!miles;getPreferences(0).edit().putBoolean("miles",miles).apply();showSettings();});
   Button export=new Button(this);export.setText("Export journeys to JSON");body.addView(export);export.setOnClickListener(v->exportJourneys());
+  Button restore=new Button(this);restore.setText("Restore journeys from .db backup");restore.setAllCaps(false);body.addView(restore);restore.setOnClickListener(v->importJourneys());
   card("PRIVACY","Journeys stay on this phone. Export shares them only when you choose. Route maps request map tiles from OpenStreetMap.");
   card("TRACKING","Uses a foreground GPS service and persistent Android notification.");
   Button delete=new Button(this);delete.setText("Delete all saved journeys");body.addView(delete);
