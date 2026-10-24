@@ -248,8 +248,8 @@ public class MainActivity extends Activity {
    double a=Math.toRadians(140+260*Math.min(1,Math.max(0,display/max)));
    p.setStrokeWidth(dp(4));p.setColor(0xffffffff);c.drawLine(cx,cy,cx+(r-dp(32))*(float)Math.cos(a),cy+(r-dp(32))*(float)Math.sin(a),p);
    p.setStyle(Paint.Style.FILL);p.setColor(teal);c.drawCircle(cx,cy,dp(7),p);
-   p.setTextAlign(Paint.Align.CENTER);p.setTextSize(Math.min(dp(54),r*.52f));p.setColor(0xffffffff);c.drawText(""+Math.round(display),cx,cy+Math.min(dp(47),r*.49f),p);
-   p.setTextSize(dp(16));p.setColor(0xffa0b4c3);c.drawText(miles?"mph":"km/h",cx,cy+Math.min(dp(67),r*.72f),p);
+   p.setTextAlign(Paint.Align.CENTER);p.setTextSize(Math.min(dp(54),r*.52f));p.setColor(0xffffffff);c.drawText(""+Math.round(display),cx,cy+Math.min(dp(63),r*.63f),p);
+   p.setTextSize(dp(16));p.setColor(0xffa0b4c3);c.drawText(miles?"mph":"km/h",cx,cy+Math.min(dp(84),r*.87f),p);
    p.setTextSize(dp(12));c.drawText("CURRENT SPEED",cx,cy-Math.min(dp(38),r*.40f),p);
   }
  }
