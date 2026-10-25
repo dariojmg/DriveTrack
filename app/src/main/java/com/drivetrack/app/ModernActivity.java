@@ -191,7 +191,7 @@ public class ModernActivity extends MainActivity {
    if(TrackingService.lastFixTime>0&&TrackingService.active)pending.setVisibility(View.GONE);
    String html="<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1,maximum-scale=1'>"
     +"<link rel='stylesheet' href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'>"
-    +"<style>html,body,#m{height:100%;margin:0;background:#0b2232}.leaflet-container{background:#07151e!important}.leaflet-tile-pane{filter:grayscale(1) invert(1) sepia(.3) hue-rotate(145deg) saturate(1.25) brightness(.44) contrast(1.2)}.leaflet-control-attribution{font-size:8px;background:#0b2232bb!important;color:#a3c3cb!important}</style></head><body><div id='m'></div>"
+    +"<style>html,body,#m{height:100%;margin:0;background:#2a3138}.leaflet-container{background:#252c33!important}.leaflet-tile-pane{filter:grayscale(1) invert(1) sepia(.3) hue-rotate(145deg) saturate(1.25) brightness(.72) contrast(1.0)}.leaflet-control-attribution{font-size:8px;background:#2a3138bb!important;color:#c6d0d4!important}</style></head><body><div id='m'></div>"
     +"<script src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'></script><script>"
     +"var m=L.map('m',{zoomControl:false,dragging:false,touchZoom:false,scrollWheelZoom:false});"
     +"L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:''}).addTo(m);"
