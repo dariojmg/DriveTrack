@@ -11,6 +11,7 @@ public class TrackingService extends Service implements LocationListener {
  public static long lastFixTime=0;
  public static int rejectedFixes=0;
  public static String locationText="Waiting for GPS";
+ public static String gpsIssue="";
  public static JSONArray points=new JSONArray(),telemetry=new JSONArray();
  private LocationManager lm;private Location last;private long lastAt=0;private double previousValidSpeed=-1;
  public void onCreate(){super.onCreate();lm=(LocationManager)getSystemService(LOCATION_SERVICE);NotificationChannel ch=new NotificationChannel("journey","Journey tracking",NotificationManager.IMPORTANCE_LOW);((NotificationManager)getSystemService(NOTIFICATION_SERVICE)).createNotificationChannel(ch);}
@@ -30,7 +31,13 @@ public class TrackingService extends Service implements LocationListener {
   }
   if(!active){started=System.currentTimeMillis();movingMs=0;pausedMs=0;pausedAt=0;paused=false;distance=0;maxSpeed=0;currentSpeed=0;rejectedFixes=0;lastFixTime=0;points=new JSONArray();telemetry=new JSONArray();last=null;lastAt=0;previousValidSpeed=-1;active=true;getSharedPreferences("recovery",0).edit().putLong("started",started).apply();}
   updateNotification();
-  try{lm.requestLocationUpdates(LocationManager.GPS_PROVIDER,1000,0,this);}catch(SecurityException ignored){}
+  gpsIssue="";
+  try{
+   if(!lm.isProviderEnabled(LocationManager.GPS_PROVIDER))gpsIssue="Turn on Location services";
+   else lm.requestLocationUpdates(LocationManager.GPS_PROVIDER,1000,0,this);
+  }catch(SecurityException err){gpsIssue="Location permission required";}
+  catch(Exception err){gpsIssue="GPS provider unavailable";}
+  sendBroadcast(new Intent(UPDATE).setPackage(getPackageName()));
   return START_STICKY;
  }
  private void updateNotification(){
@@ -39,6 +46,7 @@ public class TrackingService extends Service implements LocationListener {
  }
  public void onLocationChanged(Location p){
   if(!active||paused)return;
+  gpsIssue="";
   accuracy=p.hasAccuracy()?p.getAccuracy():999;
   if(accuracy>35){rejectedFixes++;return;}
   long now=p.getElapsedRealtimeNanos()/1000000L;
