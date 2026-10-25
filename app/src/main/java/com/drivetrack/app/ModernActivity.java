@@ -119,6 +119,11 @@ public class ModernActivity extends MainActivity {
   hud=getPreferences(0).getBoolean("hud",false);
   if(hud){showHud();return;}
   init("Dashboard");
+  if(TrackingService.active){body.setAlpha(0f);body.animate().alpha(1f).setDuration(420).start();}
+  if(!TrackingService.active){
+   showReadyDashboard();
+   return;
+  }
   LinearLayout signal=new LinearLayout(this);signal.setPadding(px(14),px(8),px(14),px(8));signal.setGravity(Gravity.CENTER_VERTICAL);
   signal.setBackground(round(surface,16));
   signal.addView(label("◉   GPS STATUS",11,muted),new LinearLayout.LayoutParams(0,-2,1));
@@ -191,6 +196,41 @@ public class ModernActivity extends MainActivity {
   currentLocationValue.setEllipsize(android.text.TextUtils.TruncateAt.END);
   block(body,place,px(65),6);
   updateDashboard();
+ }
+ void showReadyDashboard(){
+  gpsValue=null;gauge=null;liveMap=null;mapPending=null;
+  LinearLayout status=new LinearLayout(this);status.setGravity(Gravity.CENTER_VERTICAL);
+  status.setPadding(px(16),px(13),px(16),px(13));status.setBackground(round(surface,17));
+  status.addView(label("◉   GPS STATUS",12,muted),new LinearLayout.LayoutParams(0,-2,1));
+  TextView state=label("READY TO START",12,accent);status.addView(state);
+  block(body,status,px(53),8);
+  LinearLayout center=vertical();center.setGravity(Gravity.CENTER);
+  LinearLayout start=roundJourneyControl(R.drawable.ic_drive_start,"START",0xff029e91);
+  center.addView(start,new LinearLayout.LayoutParams(px(112),px(112)));
+  TextView heading=label("Ready for your journey?",24,Color.WHITE);heading.setTypeface(null,1);heading.setGravity(Gravity.CENTER);
+  block(center,heading,-2,px(0));((LinearLayout.LayoutParams)heading.getLayoutParams()).topMargin=px(22);
+  TextView subtitle=label("Tap Start to begin recording your drive",14,muted);
+  subtitle.setGravity(Gravity.CENTER);block(center,subtitle,-2,8);
+  body.addView(center,new LinearLayout.LayoutParams(-1,0,1));
+  start.setOnClickListener(v->{start.animate().scaleX(.92f).scaleY(.92f).alpha(.4f).setDuration(140).withEndAction(()->{
+   if(checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION)!=android.content.pm.PackageManager.PERMISSION_GRANTED)
+    requestPermissions(new String[]{android.Manifest.permission.ACCESS_FINE_LOCATION,android.Manifest.permission.ACCESS_COARSE_LOCATION},42);
+   else startJourney();
+  }).start();});
+  LinearLayout recent=vertical();recent.setPadding(px(18),px(14),px(18),px(12));recent.setBackground(round(surface,17));
+  TextView recentTitle=label("LAST JOURNEY",11,muted);recentTitle.setLetterSpacing(.1f);block(recent,recentTitle,-2,8);
+  String summary="No recorded journeys yet";
+  try(TripStore db=new TripStore(this);Cursor cursor=db.all()){
+   if(cursor.moveToFirst()){
+    double d=cursor.getDouble(cursor.getColumnIndexOrThrow("distance"));
+    long startMs=cursor.getLong(cursor.getColumnIndexOrThrow("started"));
+    long endMs=cursor.getLong(cursor.getColumnIndexOrThrow("ended"));
+    summary=dist(d)+"   ·   "+duration(Math.max(0,endMs-startMs));
+   }
+  }catch(Exception ignored){}
+  TextView last=label(summary,19,Color.WHITE);last.setTypeface(null,1);block(recent,last,-2,0);
+  block(body,recent,px(93),12);recent.setOnClickListener(v->showHistory());
+  state.setText("Ready to record");
  }
  @Override void updateDashboard(){
   updateScreenAwake();
