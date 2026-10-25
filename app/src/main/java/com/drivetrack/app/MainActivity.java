@@ -218,7 +218,7 @@ public class MainActivity extends Activity {
   frame.addView(map,new FrameLayout.LayoutParams(-1,-1));
   String html="<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1'>"
     +"<link rel='stylesheet' href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'>"
-    +"<style>html,body,#map{margin:0;height:100%;width:100%;background:#071722}.leaflet-tile-pane{filter:grayscale(1) invert(1) sepia(.3) hue-rotate(145deg) saturate(1.25) brightness(.44) contrast(1.2)}.leaflet-control-attribution{font-size:9px;background:#091a25bb!important;color:#bdd8dc!important}</style></head>"
+    +"<style>html,body,#map{margin:0;height:100%;width:100%;background:#252c33}.leaflet-tile-pane{filter:grayscale(1) invert(1) sepia(.3) hue-rotate(145deg) saturate(1.25) brightness(.72) contrast(1.0)}.leaflet-control-attribution{font-size:9px;background:#2a3138cc!important;color:#bdd8dc!important}</style></head>"
     +"<body><div id='map'></div><script src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'></script><script>"
     +"const coords="+pts.toString()+";const map=L.map('map');"
     +"L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap contributors'}).addTo(map);"
