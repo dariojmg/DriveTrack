@@ -177,13 +177,14 @@ public class ModernActivity extends MainActivity {
    if(TrackingService.lastFixTime>0&&TrackingService.active)pending.setVisibility(View.GONE);
    String html="<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1,maximum-scale=1'>"
     +"<link rel='stylesheet' href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'>"
-    +"<style>html,body,#m{height:100%;margin:0;background:#0b2232}.leaflet-tile-pane{filter:invert(95%) hue-rotate(174deg) brightness(.60) saturate(.85)}.leaflet-control-attribution{display:none}</style></head><body><div id='m'></div>"
+    +"<style>html,body,#m{height:100%;margin:0;background:#0b2232}.leaflet-tile-pane{filter:grayscale(1) invert(1) sepia(.3) hue-rotate(145deg) saturate(1.25) brightness(.44) contrast(1.2)}.leaflet-control-attribution{font-size:8px;background:#0b2232bb!important;color:#a3c3cb!important}</style></head><body><div id='m'></div>"
     +"<script src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'></script><script>"
     +"var m=L.map('m',{zoomControl:false,dragging:false,touchZoom:false,scrollWheelZoom:false});"
     +"L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:''}).addTo(m);"
     +"var trail=L.polyline([],{color:'#12d3bb',weight:4}).addTo(m);var dot=L.circleMarker([53.03,-7.3],{radius:7,color:'#ffffff',fillColor:'#12d3bb',fillOpacity:1});"
     +"window.moveTo=function(lat,lon){if(!Number.isFinite(lat)||!Number.isFinite(lon))return;"
     +"if(!m.hasLayer(dot))dot.addTo(m);dot.setLatLng([lat,lon]);m.setView([lat,lon],15,{animate:false});m.invalidateSize();};"
+    +"window.showRoute=function(points){if(!Array.isArray(points))return;trail.setLatLngs(points);if(points.length){let p=points[points.length-1];window.moveTo(p[0],p[1]);}};"
     +"</script></body></html>";
    liveMap.loadDataWithBaseURL("https://appassets.androidplatform.net/",html,"text/html","UTF-8",null);
   }else {liveMap=null;mapPending=null;}
@@ -198,11 +199,11 @@ public class ModernActivity extends MainActivity {
   updateDashboard();
  }
  void showReadyDashboard(){
-  gpsValue=null;gauge=null;liveMap=null;mapPending=null;
+  gpsValue=null;gauge=null;liveMap=null;mapPending=null;distanceValue=null;driveTimeValue=null;currentLocationValue=null;
   LinearLayout status=new LinearLayout(this);status.setGravity(Gravity.CENTER_VERTICAL);
   status.setPadding(px(16),px(13),px(16),px(13));status.setBackground(round(surface,17));
   status.addView(label("◉   GPS STATUS",12,muted),new LinearLayout.LayoutParams(0,-2,1));
-  TextView state=label("READY TO START",12,accent);status.addView(state);
+  TextView state=label("Ready to record",12,accent);status.addView(state);
   block(body,status,px(53),8);
   LinearLayout center=vertical();center.setGravity(Gravity.CENTER);
   LinearLayout start=roundJourneyControl(R.drawable.ic_drive_start,"START",0xff029e91);
@@ -230,7 +231,6 @@ public class ModernActivity extends MainActivity {
   }catch(Exception ignored){}
   TextView last=label(summary,19,Color.WHITE);last.setTypeface(null,1);block(recent,last,-2,0);
   block(body,recent,px(93),12);recent.setOnClickListener(v->showHistory());
-  state.setText("Ready to record");
  }
  @Override void updateDashboard(){
   updateScreenAwake();
@@ -251,7 +251,7 @@ public class ModernActivity extends MainActivity {
    JSONArray latest=pts.getJSONArray(pts.length()-1);
    double lat=latest.getDouble(0),lon=latest.getDouble(1);
    if(Math.abs(lat)>90||Math.abs(lon)>180)return;
-   liveMap.evaluateJavascript("if(window.moveTo)window.moveTo("+lat+","+lon+");",null);
+   liveMap.evaluateJavascript("if(window.showRoute)window.showRoute("+pts.toString()+");",null);
   }catch(Exception ignored){}
  }
  void openLiveMap(){
