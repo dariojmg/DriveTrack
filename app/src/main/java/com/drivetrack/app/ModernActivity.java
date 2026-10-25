@@ -126,29 +126,11 @@ public class ModernActivity extends MainActivity {
   block(body,signal,px(40),4);
   FrameLayout dial=new FrameLayout(this);
   dial.setBackground(round(0xff081827,22));dial.setClipToOutline(true);
-  View roads=new View(this){
-   final Paint roadPen=new Paint(3);
-   @Override protected void onDraw(Canvas c){
-    super.onDraw(c);float w=getWidth(),h=getHeight();
-    // Subtle stylized roadway texture behind the cockpit dial, not a navigational map.
-    c.save();c.clipRect(0,h*.53f,w,h);
-    roadPen.setStyle(Paint.Style.STROKE);
-    for(int i=-3;i<16;i++){
-     float y=h*.58f+i*px(25);
-     Path p=new Path();p.moveTo(-20,y);p.cubicTo(w*.2f,y+px(25),w*.5f,y-px(28),w+20,y+px(9));
-     roadPen.setColor(i%3==0?0xff204256:0xff173344);roadPen.setStrokeWidth(px(i%3==0?2:1));c.drawPath(p,roadPen);
-    }
-    for(int i=-5;i<17;i++){float x=i*px(38);roadPen.setStrokeWidth(px(1));roadPen.setColor(0xff173344);
-     c.drawLine(x,h*.53f,x+px(110),h,roadPen);}
-    c.restore();
-   }
-  };
-  dial.addView(roads,new FrameLayout.LayoutParams(-1,-1));
   gauge=new Gauge(this);dial.addView(gauge,new FrameLayout.LayoutParams(-1,-1));
   LinearLayout actions=new LinearLayout(this);actions.setGravity(Gravity.CENTER);
   // Center round console-style controls beneath the dial, consistently in every journey state.
   FrameLayout.LayoutParams frame=new FrameLayout.LayoutParams(-1,px(100),Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL);
-  frame.bottomMargin=px(13);dial.addView(actions,frame);
+  frame.bottomMargin=px(1);dial.addView(actions,frame);
   if(!TrackingService.active){
    LinearLayout start=roundJourneyControl(R.drawable.ic_drive_start,"START",0xff00a898);
    actions.addView(start,new LinearLayout.LayoutParams(px(94),px(94)));
@@ -166,6 +148,7 @@ public class ModernActivity extends MainActivity {
     .setNegativeButton("Cancel",null).setPositiveButton("Save & stop",(d,w)->{startService(new Intent(this,TrackingService.class).setAction("STOP"));handler.postDelayed(()->showDashboard(),300);}).show());
   }
   boolean showMap=getPreferences(0).getBoolean("showLiveMap",true);
+  // Let the dial take remaining space; map and stats retain guaranteed heights.
   LinearLayout.LayoutParams dialLayout=new LinearLayout.LayoutParams(-1,0,1);body.addView(dial,dialLayout);
   if(showMap){
    FrameLayout mini=new FrameLayout(this);mini.setBackground(round(0xff0a2434,16));mini.setClipToOutline(true);
@@ -181,11 +164,12 @@ public class ModernActivity extends MainActivity {
    notePosition.leftMargin=px(8);notePosition.topMargin=px(8);mini.addView(mapNote,notePosition);
 
    overlay.setOnClickListener(v->openLiveMap());
-   // Integrate live location into the lower cockpit, rather than another large empty panel.
-   FrameLayout.LayoutParams miniPosition=new FrameLayout.LayoutParams(-1,px(156),Gravity.BOTTOM);
-   miniPosition.bottomMargin=0;dial.addView(mini,0,miniPosition);
-   View veil=new View(this);veil.setBackgroundColor(0x4405121d);
-   dial.addView(veil,1,new FrameLayout.LayoutParams(-1,px(156),Gravity.BOTTOM));
+   // A real, separate map viewport is never covered by the gauge or controls.
+   block(body,mini,px(112),8);
+   TextView pending=label("Map available when GPS location is acquired",12,0xffaec6d4);
+   pending.setGravity(Gravity.CENTER);pending.setPadding(px(8),px(34),px(8),0);
+   mini.addView(pending,new FrameLayout.LayoutParams(-1,-1));
+   if(TrackingService.lastFixTime>0&&TrackingService.active)pending.setVisibility(View.GONE);
    String html="<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1,maximum-scale=1'>"
     +"<link rel='stylesheet' href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'>"
     +"<style>html,body,#m{height:100%;margin:0;background:#0b2232}.leaflet-tile-pane{filter:invert(95%) hue-rotate(174deg) brightness(.60) saturate(.85)}.leaflet-control-attribution{display:none}</style></head><body><div id='m'></div>"
@@ -201,11 +185,11 @@ public class ModernActivity extends MainActivity {
   dashboardStats=new LinearLayout(this);
   distanceValue=compactCard(dashboardStats,"DISTANCE","0.00 km",true);
   driveTimeValue=compactCard(dashboardStats,"DURATION","00:00",false);
-  block(body,dashboardStats,px(74),7);
-  LinearLayout place=tile("⌖   CURRENT LOCATION","Waiting for GPS");
+  block(body,dashboardStats,px(68),7);
+  LinearLayout place=tile("⌖   CURRENT LOCATION","Waiting for GPS");place.setPadding(px(15),px(8),px(14),px(7));
   currentLocationValue=(TextView)place.getChildAt(1);currentLocationValue.setTextSize(14);currentLocationValue.setSingleLine(true);
   currentLocationValue.setEllipsize(android.text.TextUtils.TruncateAt.END);
-  block(body,place,px(57),6);
+  block(body,place,px(65),6);
   updateDashboard();
  }
  @Override void updateDashboard(){
