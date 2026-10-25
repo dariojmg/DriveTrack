@@ -191,11 +191,11 @@ public class ModernActivity extends MainActivity {
    if(TrackingService.lastFixTime>0&&TrackingService.active)pending.setVisibility(View.GONE);
    // A north-up, modestly pitched tracking map. No turn-by-turn navigation.
    String html="<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1,maximum-scale=1'>"
-    +"<link rel='stylesheet' href='https://unpkg.com/maplibre-gl@5.16.0/dist/maplibre-gl.css'>"
+    +"<link rel='stylesheet' href='https://unpkg.com/maplibre-gl@6.15.0/dist/maplibre-gl.css'>"
     +"<style>html,body,#m{height:100%;margin:0;background:#2c353b}canvas{outline:none}"
     +".maplibregl-canvas{filter:brightness(.93) saturate(.83)}"
     +".maplibregl-control-container{font-size:9px}</style></head><body><div id='m'></div>"
-    +"<script src='https://unpkg.com/maplibre-gl@5.16.0/dist/maplibre-gl.js'></script>"
+    +"<script src='https://unpkg.com/maplibre-gl@6.15.0/dist/maplibre-gl.js'></script>"
     +"<script>var mapReady=false,queued=null;"
     +"var style={version:8,sources:{streets:{type:'raster',tiles:['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],tileSize:256,attribution:'&copy; OpenStreetMap contributors'}},layers:[{id:'streets',type:'raster',source:'streets',paint:{'raster-brightness-min':0.1,'raster-brightness-max':0.73,'raster-saturation':-0.65,'raster-contrast':0.04}}]};"
     +"try{var m=new maplibregl.Map({container:'m',style:style,center:[-7.3,53.03],zoom:14,pitch:38,bearing:0,interactive:false,attributionControl:true});"
