@@ -28,7 +28,7 @@ public class ModernActivity extends MainActivity {
   TextView title=label(heading,23,0xfff4f8fb);title.setTypeface(null,1);block(parent,title,-2,2);
   if(sub!=null){TextView desc=label(sub,12,muted);block(parent,desc,-2,10);}
  }
- Button button(String text,int color){Button b=new Button(this);b.setText(text);b.setAllCaps(false);b.setTextSize(14);b.setTypeface(null,1);b.setTextColor(-1);b.setMinHeight(0);b.setMinimumHeight(0);b.setInsetTop(0);b.setInsetBottom(0);b.setBackgroundTintList(ColorStateList.valueOf(color));return b;}
+ Button button(String text,int color){Button b=new Button(this);b.setText(text);b.setAllCaps(false);b.setTextSize(14);b.setTypeface(null,1);b.setTextColor(-1);b.setMinHeight(0);b.setMinimumHeight(0);b.setBackgroundTintList(ColorStateList.valueOf(color));return b;}
  LinearLayout tile(String title,String value){
   LinearLayout l=vertical();l.setPadding(px(15),px(13),px(14),px(12));l.setBackground(round(surface,20));
   block(l,label(title,11,muted),-2,6);
