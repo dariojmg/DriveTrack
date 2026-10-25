@@ -249,7 +249,7 @@ public class ModernActivity extends MainActivity {
  @Override void updateDashboard(){
   updateScreenAwake();
   if(screen==0){
-   if(gpsValue!=null)gpsValue.setText(!TrackingService.active?"○ Waiting for GPS":TrackingService.paused?"Ⅱ Paused":TrackingService.lastFixTime>0&&System.currentTimeMillis()-TrackingService.lastFixTime>8000?"○ Signal lost":TrackingService.accuracy<=10&&TrackingService.lastFixTime>0?"● Strong · ±"+(int)TrackingService.accuracy+" m":TrackingService.accuracy<=25&&TrackingService.lastFixTime>0?"● Fair · ±"+(int)TrackingService.accuracy+" m":TrackingService.lastFixTime>0?"○ Poor · ±"+(int)TrackingService.accuracy+" m":"○ Acquiring GPS");
+   if(gpsValue!=null)gpsValue.setText(TrackingService.active&&!TrackingService.gpsIssue.isEmpty()?TrackingService.gpsIssue:!TrackingService.active?"○ Waiting for GPS":TrackingService.paused?"Ⅱ Paused":TrackingService.lastFixTime>0&&System.currentTimeMillis()-TrackingService.lastFixTime>8000?"○ Signal lost":TrackingService.accuracy<=10&&TrackingService.lastFixTime>0?"● Strong · ±"+(int)TrackingService.accuracy+" m":TrackingService.accuracy<=25&&TrackingService.lastFixTime>0?"● Fair · ±"+(int)TrackingService.accuracy+" m":TrackingService.lastFixTime>0?"○ Poor · ±"+(int)TrackingService.accuracy+" m":"○ Acquiring GPS");
    if(distanceValue!=null)distanceValue.setText(dist(TrackingService.distance));
    if(driveTimeValue!=null)driveTimeValue.setText(TrackingService.active?duration(TrackingService.elapsedActiveMs()):"00:00");
    if(currentLocationValue!=null)currentLocationValue.setText(TrackingService.active?TrackingService.locationText:"Waiting for GPS");
@@ -257,7 +257,7 @@ public class ModernActivity extends MainActivity {
    if(mapPending!=null){
     boolean fix=TrackingService.lastFixTime>0&&System.currentTimeMillis()-TrackingService.lastFixTime<12000;
     mapPending.setVisibility(fix?View.GONE:View.VISIBLE);
-    if(!fix)mapPending.setText(TrackingService.lastFixTime>0?
+    if(!fix)mapPending.setText(!TrackingService.gpsIssue.isEmpty()?TrackingService.gpsIssue:TrackingService.lastFixTime>0?
       "GPS signal lost · Waiting for accurate coordinates":
       "Searching for GPS satellites · Move outdoors for a stronger signal");
    }
