@@ -136,7 +136,7 @@ public class ModernActivity extends MainActivity {
   LinearLayout actions=new LinearLayout(this);actions.setGravity(Gravity.CENTER);
   // Center round console-style controls beneath the dial, consistently in every journey state.
   FrameLayout.LayoutParams frame=new FrameLayout.LayoutParams(-1,px(100),Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL);
-  frame.bottomMargin=px(1);dial.addView(actions,frame);
+  frame.bottomMargin=px(32);dial.addView(actions,frame);
   if(!TrackingService.active){
    LinearLayout start=roundJourneyControl(R.drawable.ic_drive_start,"START",0xff00a898);
    actions.addView(start,new LinearLayout.LayoutParams(px(94),px(94)));
@@ -185,8 +185,8 @@ public class ModernActivity extends MainActivity {
     mini.animate().translationY(0).alpha(1f).setDuration(580)
       .setInterpolator(new android.view.animation.DecelerateInterpolator()).start();
    });
-   TextView pending=label("Map available when GPS location is acquired",12,0xffaec6d4);mapPending=pending;
-   pending.setGravity(Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL);pending.setPadding(px(8),0,px(8),px(120));
+   TextView pending=label("Searching for GPS satellites · Move outdoors for a stronger signal",12,0xffaec6d4);mapPending=pending;
+   pending.setGravity(Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL);pending.setPadding(px(18),0,px(18),px(145));
    mini.addView(pending,new FrameLayout.LayoutParams(-1,-1));
    if(TrackingService.lastFixTime>0&&TrackingService.active)pending.setVisibility(View.GONE);
    String html="<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1,maximum-scale=1'>"
@@ -254,7 +254,13 @@ public class ModernActivity extends MainActivity {
    if(driveTimeValue!=null)driveTimeValue.setText(TrackingService.active?duration(TrackingService.elapsedActiveMs()):"00:00");
    if(currentLocationValue!=null)currentLocationValue.setText(TrackingService.active?TrackingService.locationText:"Waiting for GPS");
    if(gauge!=null)gauge.invalidate();
-   if(mapPending!=null)mapPending.setVisibility(TrackingService.active&&TrackingService.lastFixTime>0?View.GONE:View.VISIBLE);
+   if(mapPending!=null){
+    boolean fix=TrackingService.lastFixTime>0&&System.currentTimeMillis()-TrackingService.lastFixTime<12000;
+    mapPending.setVisibility(fix?View.GONE:View.VISIBLE);
+    if(!fix)mapPending.setText(TrackingService.lastFixTime>0?
+      "GPS signal lost · Waiting for accurate coordinates":
+      "Searching for GPS satellites · Move outdoors for a stronger signal");
+   }
    if(liveMap!=null&&TrackingService.active&&TrackingService.lastFixTime>0)updateLiveMap();
   }else if(screen==4&&digitalSpeed!=null)digitalSpeed.setText(String.valueOf(Math.round(TrackingService.currentSpeed*(miles?2.236936:3.6))));
  }
