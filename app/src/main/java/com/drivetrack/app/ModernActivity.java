@@ -431,6 +431,18 @@ public class ModernActivity extends MainActivity {
    block(body,rail,px(11),14);
   }
  }
+ void switchRow(LinearLayout parent,String title,String subtitle,String key,boolean initial,Runnable changed){
+  LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);row.setPadding(px(15),px(10),px(12),px(10));row.setBackground(round(surface,18));
+  LinearLayout details=vertical();TextView headline=label(title,15,0xfff4f8fb);headline.setTypeface(null,1);
+  block(details,headline,-2,3);block(details,label(subtitle,12,muted),-2,0);
+  row.addView(details,new LinearLayout.LayoutParams(0,-2,1));
+  Switch toggle=new Switch(this);toggle.setChecked(getPreferences(0).getBoolean(key,initial));
+  toggle.setThumbTintList(new ColorStateList(new int[][]{new int[]{android.R.attr.state_checked},new int[]{}},new int[]{accent,0xff9cabb4}));
+  row.addView(toggle);
+  toggle.setOnCheckedChangeListener((v,checked)->{getPreferences(0).edit().putBoolean(key,checked).apply();changed.run();});
+  row.setOnClickListener(v->toggle.setChecked(!toggle.isChecked()));
+  block(parent,row,px(69),9);
+ }
  void sectionLabel(LinearLayout parent,String text){
   TextView label=label(text,11,accent);label.setTypeface(null,1);
   label.setLetterSpacing(.1f);block(parent,label,-2,9);
@@ -440,9 +452,8 @@ public class ModernActivity extends MainActivity {
   sectionLabel(body,"DRIVING");
   Button units=button("Distance units     ·     "+(miles?"Miles / mph":"Kilometres / km/h"),surface);block(body,units,px(52),10);
   units.setOnClickListener(v->{miles=!miles;getPreferences(0).edit().putBoolean("miles",miles).apply();showSettings();});
-  Button awake=button("Keep screen awake     ·     "+(getPreferences(0).getBoolean("keepAwake",true)?"ON":"OFF"),surface);
-  block(body,awake,px(52),10);
-  awake.setOnClickListener(v->{boolean value=!getPreferences(0).getBoolean("keepAwake",true);getPreferences(0).edit().putBoolean("keepAwake",value).apply();keepAwake=value;updateScreenAwake();showSettings();});
+  switchRow(body,"Keep screen awake","Keep display visible during active recording","keepAwake",true,()->{keepAwake=getPreferences(0).getBoolean("keepAwake",true);updateScreenAwake();});
+  switchRow(body,"Live mini map","Show your location beneath the speedometer","showLiveMap",true,()->{});
   sectionLabel(body,"DISPLAY");
   Button display=button("Minimal speedometer / HUD   ›",surface);block(body,display,px(52),10);
   display.setOnClickListener(v->{getPreferences(0).edit().putBoolean("hud",true).apply();showDashboard();});
