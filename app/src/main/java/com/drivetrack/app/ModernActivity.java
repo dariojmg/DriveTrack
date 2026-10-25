@@ -14,23 +14,23 @@ import java.text.*;
 import org.json.*;
 
 public class ModernActivity extends MainActivity {
- final int ink=0xff0c131a, surface=0xff192733, accent=0xff16dcb5,muted=0xff93a9b8;
+ final int ink=0xff0b131b, surface=0xff1c2c38, accent=0xff11d3bb,muted=0xffa5b8c5;
  long selectedId=-1;int exportType=0;int monthOffset=0;String searchTerm="";boolean hud=false;
  static final int DETAIL_EXPORT=880;
  LinearLayout panelRoot; TextView digitalSpeed;boolean keepAwake=true;
  int px(int v){return (int)(v*getResources().getDisplayMetrics().density+.5f);}
  GradientDrawable round(int color,int radius){GradientDrawable g=new GradientDrawable();g.setColor(color);g.setCornerRadius(px(radius));return g;}
- TextView label(String t,int sp,int col){TextView v=new TextView(this);v.setText(t);v.setTextSize(sp);v.setTextColor(col);return v;}
+ TextView label(String t,int sp,int col){TextView v=new TextView(this);v.setText(t);v.setTextSize(sp);v.setTextColor(col);v.setFontFeatureSettings("tnum");return v;}
  LinearLayout.LayoutParams margin(int height,int bottom){LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,height<0?height:height);p.bottomMargin=px(bottom);return p;}
  LinearLayout vertical(){LinearLayout l=new LinearLayout(this);l.setOrientation(1);return l;}
  void block(LinearLayout parent,View v,int height,int gap){parent.addView(v,margin(height,gap));}
  void headerSmall(LinearLayout parent,String heading,String sub){
-  TextView title=label(heading,20,0xffffffff);title.setTypeface(null,1);block(parent,title,-2,2);
+  TextView title=label(heading,23,0xfff4f8fb);title.setTypeface(null,1);block(parent,title,-2,2);
   if(sub!=null){TextView desc=label(sub,12,muted);block(parent,desc,-2,10);}
  }
- Button button(String text,int color){Button b=new Button(this);b.setText(text);b.setAllCaps(false);b.setTextSize(14);b.setTextColor(-1);b.setBackgroundTintList(ColorStateList.valueOf(color));return b;}
+ Button button(String text,int color){Button b=new Button(this);b.setText(text);b.setAllCaps(false);b.setTextSize(14);b.setTypeface(null,1);b.setTextColor(-1);b.setMinHeight(0);b.setMinimumHeight(0);b.setInsetTop(0);b.setInsetBottom(0);b.setBackgroundTintList(ColorStateList.valueOf(color));return b;}
  LinearLayout tile(String title,String value){
-  LinearLayout l=vertical();l.setPadding(px(13),px(10),px(12),px(10));l.setBackground(round(surface,14));
+  LinearLayout l=vertical();l.setPadding(px(15),px(13),px(14),px(12));l.setBackground(round(surface,20));
   block(l,label(title,11,muted),-2,6);
   TextView v=label(value,22,-1);v.setTypeface(null,1);l.addView(v);return l;
  }
@@ -50,7 +50,12 @@ public class ModernActivity extends MainActivity {
    v.setPadding(0,top,0,bottom);return in;
   });
   setContentView(root);root.requestApplyInsets();
-  LinearLayout header=new LinearLayout(this);header.setGravity(Gravity.CENTER_VERTICAL);header.setPadding(px(16),px(7),px(16),px(8));
+  LinearLayout header=new LinearLayout(this);header.setGravity(Gravity.CENTER_VERTICAL);header.setPadding(px(16),px(8),px(16),px(11));
+  if(!title.equals("Dashboard")&&!title.equals("History")&&!title.equals("Settings")){
+   TextView back=label("‹",32,accent);back.setGravity(Gravity.CENTER);back.setContentDescription("Back");
+   header.addView(back,new LinearLayout.LayoutParams(px(48),px(48)));
+   back.setOnClickListener(v->goBackFrom(title));
+  }
   TextView brand=label("DT  DriveTrack",19,accent);brand.setTypeface(null,1);header.addView(brand,new LinearLayout.LayoutParams(0,-2,1));
   if(title.equals("Dashboard")){
    TextView gps=label(TrackingService.active?(TrackingService.paused?"Ⅱ PAUSED":TrackingService.lastFixTime>0?"● RECORDING":"○ ACQUIRING"):"○ WAITING FOR GPS",11,accent);header.addView(gps);
@@ -66,7 +71,17 @@ public class ModernActivity extends MainActivity {
    LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,px(49),1);lp.setMargins(px(2),0,px(2),0);nav.addView(tab,lp);
    tab.setOnClickListener(v->{hud=false;if(entry.contains("Drive"))showDashboard();else if(entry.contains("History"))showHistory();else showSettings();});
   }
-  root.addView(nav);
+  if(title.equals("Dashboard")||title.equals("History")||title.equals("Settings"))root.addView(nav);
+ }
+ void goBackFrom(String title){
+  if(title.equals("Details")||title.equals("Insights"))showHistory();
+  else if(title.equals("HUD")){getPreferences(0).edit().putBoolean("hud",false).apply();showDashboard();}
+  else showDashboard();
+ }
+ @Override public void onBackPressed(){
+  if(screen==2||screen==5)showHistory();
+  else if(screen==4){getPreferences(0).edit().putBoolean("hud",false).apply();showDashboard();}
+  else super.onBackPressed();
  }
  LinearLayout roundJourneyControl(int iconRes,String title,int color){
   GradientDrawable circle=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
@@ -175,10 +190,14 @@ public class ModernActivity extends MainActivity {
  @Override void showHistory(){
   screen=1;init("History");headerSmall(body,"Your journeys","All your drives, organised by date");
   try(TripStore db=new TripStore(this);Cursor c=db.all()){
-   int count=0;double sum=0;while(c.moveToNext()){count++;sum+=c.getDouble(c.getColumnIndexOrThrow("distance"));}
+   int count=0;double sum=0;long totalMs=0;
+   while(c.moveToNext()){count++;sum+=c.getDouble(c.getColumnIndexOrThrow("distance"));
+    totalMs+=Math.max(0,c.getLong(c.getColumnIndexOrThrow("ended"))-c.getLong(c.getColumnIndexOrThrow("started"))-c.getLong(c.getColumnIndexOrThrow("pausedms")));
+   }
    twoStats(body,"TOTAL DISTANCE",dist(sum),"JOURNEYS",String.valueOf(count));
+   TextView drivingTime=label("Total drive time  ·  "+duration(totalMs),13,muted);block(body,drivingTime,-2,12);
   }
-  Button insights=button("▥  Driving insights",surface);block(body,insights,px(48),8);insights.setOnClickListener(v->showInsights());
+
   LinearLayout filters=new LinearLayout(this);
   Button earlier=button("‹",surface),later=button("›",surface);
   Calendar month=Calendar.getInstance();month.add(Calendar.MONTH,monthOffset);
@@ -208,7 +227,7 @@ public class ModernActivity extends MainActivity {
      String dis=dist(c.getDouble(c.getColumnIndexOrThrow("distance")));
      double max=c.getDouble(c.getColumnIndexOrThrow("maxspeed"));
      long time=c.getLong(c.getColumnIndexOrThrow("ended"))-start-c.getLong(c.getColumnIndexOrThrow("pausedms"));
-     LinearLayout card=vertical();card.setPadding(px(14),px(12),px(14),px(12));card.setBackground(round(surface,15));
+     LinearLayout card=vertical();card.setPadding(px(14),px(12),px(14),px(12));card.setBackground(round(surface,21));
      LinearLayout heading=new LinearLayout(this);heading.setGravity(Gravity.CENTER_VERTICAL);
      TextView tripName=label(title,17,-1);tripName.setTypeface(null,1);
      heading.addView(tripName,new LinearLayout.LayoutParams(0,-2,1));
@@ -249,7 +268,8 @@ public class ModernActivity extends MainActivity {
    public void afterTextChanged(android.text.Editable e){}
   });
   load.run();
-  Button export=button("Export all journeys · JSON",surface);block(body,export,px(48),16);export.setOnClickListener(v->exportJourneys());
+  Button insights=button("↗  View detailed statistics",surface);block(body,insights,px(45),8);insights.setOnClickListener(v->showInsights());
+  Button export=button("Export journey history · JSON",surface);block(body,export,px(45),16);export.setOnClickListener(v->exportJourneys());
  }
  @Override void showDetail(long id){
   selectedId=id;screen=2;init("Details");
