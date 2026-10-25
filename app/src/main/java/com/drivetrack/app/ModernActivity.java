@@ -17,7 +17,7 @@ public class ModernActivity extends MainActivity {
  final int ink=0xff07111c, surface=0xff122534, accent=0xff09ded0,muted=0xff9cb6c8;
  long selectedId=-1;int exportType=0;int monthOffset=0;String searchTerm="";boolean hud=false;
  static final int DETAIL_EXPORT=880;
- LinearLayout panelRoot; TextView digitalSpeed;boolean keepAwake=true; android.webkit.WebView liveMap;
+ LinearLayout panelRoot; TextView digitalSpeed;boolean keepAwake=true; android.webkit.WebView liveMap; TextView mapPending;
  int px(int v){return (int)(v*getResources().getDisplayMetrics().density+.5f);}
  GradientDrawable round(int color,int radius){GradientDrawable g=new GradientDrawable();g.setColor(color);g.setCornerRadius(px(radius));return g;}
  TextView label(String t,int sp,int col){TextView v=new TextView(this);v.setText(t);v.setTextSize(sp);v.setTextColor(col);v.setFontFeatureSettings("tnum");return v;}
@@ -166,7 +166,7 @@ public class ModernActivity extends MainActivity {
    overlay.setOnClickListener(v->openLiveMap());
    // A real, separate map viewport is never covered by the gauge or controls.
    block(body,mini,px(112),8);
-   TextView pending=label("Map available when GPS location is acquired",12,0xffaec6d4);
+   TextView pending=label("Map available when GPS location is acquired",12,0xffaec6d4);mapPending=pending;
    pending.setGravity(Gravity.CENTER);pending.setPadding(px(8),px(34),px(8),0);
    mini.addView(pending,new FrameLayout.LayoutParams(-1,-1));
    if(TrackingService.lastFixTime>0&&TrackingService.active)pending.setVisibility(View.GONE);
@@ -181,7 +181,7 @@ public class ModernActivity extends MainActivity {
     +"if(!m.hasLayer(dot))dot.addTo(m);dot.setLatLng([lat,lon]);m.setView([lat,lon],15,{animate:false});m.invalidateSize();};"
     +"</script></body></html>";
    liveMap.loadDataWithBaseURL("https://appassets.androidplatform.net/",html,"text/html","UTF-8",null);
-  }else liveMap=null;
+  }else {liveMap=null;mapPending=null;}
   dashboardStats=new LinearLayout(this);
   distanceValue=compactCard(dashboardStats,"DISTANCE","0.00 km",true);
   driveTimeValue=compactCard(dashboardStats,"DURATION","00:00",false);
@@ -200,6 +200,7 @@ public class ModernActivity extends MainActivity {
    if(driveTimeValue!=null)driveTimeValue.setText(TrackingService.active?duration(TrackingService.elapsedActiveMs()):"00:00");
    if(currentLocationValue!=null)currentLocationValue.setText(TrackingService.active?TrackingService.locationText:"Waiting for GPS");
    if(gauge!=null)gauge.invalidate();
+   if(mapPending!=null)mapPending.setVisibility(TrackingService.active&&TrackingService.lastFixTime>0?View.GONE:View.VISIBLE);
    if(liveMap!=null&&TrackingService.active&&TrackingService.lastFixTime>0)updateLiveMap();
   }else if(screen==4&&digitalSpeed!=null)digitalSpeed.setText(String.valueOf(Math.round(TrackingService.currentSpeed*(miles?2.236936:3.6))));
  }
