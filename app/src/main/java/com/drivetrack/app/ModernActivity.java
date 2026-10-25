@@ -17,7 +17,7 @@ public class ModernActivity extends MainActivity {
  final int ink=0xff0b131b, surface=0xff1c2c38, accent=0xff11d3bb,muted=0xffa5b8c5;
  long selectedId=-1;int exportType=0;int monthOffset=0;String searchTerm="";boolean hud=false;
  static final int DETAIL_EXPORT=880;
- LinearLayout panelRoot; TextView digitalSpeed;boolean keepAwake=true;
+ LinearLayout panelRoot; TextView digitalSpeed;boolean keepAwake=true; android.webkit.WebView liveMap;
  int px(int v){return (int)(v*getResources().getDisplayMetrics().density+.5f);}
  GradientDrawable round(int color,int radius){GradientDrawable g=new GradientDrawable();g.setColor(color);g.setCornerRadius(px(radius));return g;}
  TextView label(String t,int sp,int col){TextView v=new TextView(this);v.setText(t);v.setTextSize(sp);v.setTextColor(col);v.setFontFeatureSettings("tnum");return v;}
@@ -121,10 +121,11 @@ public class ModernActivity extends MainActivity {
   hud=getPreferences(0).getBoolean("hud",false);
   if(hud){showHud();return;}
   init("Dashboard");
-  LinearLayout signal=new LinearLayout(this);signal.setPadding(px(12),px(9),px(12),px(9));signal.setGravity(Gravity.CENTER_VERTICAL);signal.setBackground(round(surface,12));
-  signal.addView(label("GPS SIGNAL",11,muted),new LinearLayout.LayoutParams(0,-2,1));
-  gpsValue=label("Waiting for fix",13,-1);signal.addView(gpsValue);
-  block(body,signal,px(43),7);
+  LinearLayout signal=new LinearLayout(this);signal.setPadding(px(14),px(8),px(14),px(8));signal.setGravity(Gravity.CENTER_VERTICAL);
+  signal.setBackground(round(surface,16));
+  signal.addView(label("GPS",11,muted),new LinearLayout.LayoutParams(0,-2,1));
+  gpsValue=label("Acquiring signal",12,accent);signal.addView(gpsValue);
+  block(body,signal,px(40),4);
   FrameLayout dial=new FrameLayout(this);
   gauge=new Gauge(this);dial.addView(gauge,new FrameLayout.LayoutParams(-1,-1));
   LinearLayout actions=new LinearLayout(this);actions.setGravity(Gravity.CENTER);
@@ -147,7 +148,30 @@ public class ModernActivity extends MainActivity {
     .setMessage("The trip will be saved to History and the dashboard will reset.")
     .setNegativeButton("Cancel",null).setPositiveButton("Save & stop",(d,w)->{startService(new Intent(this,TrackingService.class).setAction("STOP"));handler.postDelayed(()->showDashboard(),300);}).show());
   }
-  LinearLayout.LayoutParams dialLayout=new LinearLayout.LayoutParams(-1,0,1);body.addView(dial,dialLayout);
+  boolean showMap=getPreferences(0).getBoolean("showLiveMap",true);
+  LinearLayout.LayoutParams dialLayout=new LinearLayout.LayoutParams(-1,0,showMap?1:1.3f);body.addView(dial,dialLayout);
+  if(showMap){
+   FrameLayout mini=new FrameLayout(this);mini.setBackground(round(surface,16));
+   liveMap=new android.webkit.WebView(this);liveMap.setBackgroundColor(surface);
+   liveMap.getSettings().setJavaScriptEnabled(true);
+   liveMap.getSettings().setDomStorageEnabled(false);
+   mini.addView(liveMap,new FrameLayout.LayoutParams(-1,-1));
+   View overlay=new View(this);overlay.setClickable(true);overlay.setContentDescription("Open live map");
+   mini.addView(overlay,new FrameLayout.LayoutParams(-1,-1));
+   overlay.setOnClickListener(v->openLiveMap());
+   block(body,mini,px(110),7);
+   String html="<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1,maximum-scale=1'>"
+    +"<link rel='stylesheet' href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'>"
+    +"<style>html,body,#m{height:100%;margin:0;background:#172936}</style></head><body><div id='m'></div>"
+    +"<script src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'></script><script>"
+    +"var m=L.map('m',{zoomControl:false,dragging:false,touchZoom:false,scrollWheelZoom:false});"
+    +"L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:''}).addTo(m);"
+    +"var trail=L.polyline([],{color:'#12d3bb',weight:4}).addTo(m);var dot=L.circleMarker([53.03,-7.3],{radius:7,color:'#ffffff',fillColor:'#12d3bb',fillOpacity:1});"
+    +"window.moveTo=function(lat,lon){if(!Number.isFinite(lat)||!Number.isFinite(lon))return;"
+    +"if(!m.hasLayer(dot))dot.addTo(m);dot.setLatLng([lat,lon]);m.setView([lat,lon],15,{animate:false});m.invalidateSize();};"
+    +"</script></body></html>";
+   liveMap.loadDataWithBaseURL("https://appassets.androidplatform.net/",html,"text/html","UTF-8",null);
+  }else liveMap=null;
   dashboardStats=new LinearLayout(this);
   distanceValue=compactCard(dashboardStats,"DISTANCE","0.00 km",true);
   driveTimeValue=compactCard(dashboardStats,"DURATION","00:00",false);
@@ -166,7 +190,28 @@ public class ModernActivity extends MainActivity {
    if(driveTimeValue!=null)driveTimeValue.setText(TrackingService.active?duration(TrackingService.elapsedActiveMs()):"00:00");
    if(currentLocationValue!=null)currentLocationValue.setText(TrackingService.active?TrackingService.locationText:"Waiting for GPS");
    if(gauge!=null)gauge.invalidate();
+   if(liveMap!=null&&TrackingService.active&&TrackingService.lastFixTime>0)updateLiveMap();
   }else if(screen==4&&digitalSpeed!=null)digitalSpeed.setText(String.valueOf(Math.round(TrackingService.currentSpeed*(miles?2.236936:3.6))));
+ }
+ void updateLiveMap(){
+  try{
+   JSONArray pts=TrackingService.points;
+   if(pts==null||pts.length()==0)return;
+   JSONArray latest=pts.getJSONArray(pts.length()-1);
+   double lat=latest.getDouble(0),lon=latest.getDouble(1);
+   if(Math.abs(lat)>90||Math.abs(lon)>180)return;
+   liveMap.evaluateJavascript("if(window.moveTo)window.moveTo("+lat+","+lon+");",null);
+  }catch(Exception ignored){}
+ }
+ void openLiveMap(){
+  // The full-screen live view uses the device's mapping application until a journey is saved.
+  if(TrackingService.active&&TrackingService.points!=null&&TrackingService.points.length()>0){
+   try{
+    JSONArray point=TrackingService.points.getJSONArray(TrackingService.points.length()-1);
+    android.net.Uri uri=android.net.Uri.parse("geo:"+point.getDouble(0)+","+point.getDouble(1)+"?q="+point.getDouble(0)+","+point.getDouble(1));
+    startActivity(new Intent(Intent.ACTION_VIEW,uri));
+   }catch(Exception e){Toast.makeText(this,"Location unavailable",Toast.LENGTH_SHORT).show();}
+  }else Toast.makeText(this,"Start a journey to view your live location",Toast.LENGTH_SHORT).show();
  }
  void updateScreenAwake(){
   if(keepAwake&&TrackingService.active&&!TrackingService.paused&&(screen==0||screen==4)&&hasWindowFocus())
