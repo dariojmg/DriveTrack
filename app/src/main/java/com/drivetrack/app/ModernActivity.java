@@ -304,11 +304,18 @@ public class ModernActivity extends MainActivity {
    twoStats(body,"DISTANCE",dist(metres),"TOP SPEED",speed(max));
    long effective=Math.max(0,ended-started-pause);
    twoStats(body,"DURATION",duration(effective),"MOVING AVG",speed(metres/Math.max(1,moving/1000d)));
-   twoStats(body,"OVERALL AVG",speed(metres/Math.max(1,effective/1000d)),"STOPPED",duration(Math.max(0,effective-moving)));
-   twoStats(body,"PAUSED",duration(pause),"GPS POINTS",String.valueOf(coords.length()));
+   LinearLayout technical=vertical();
+   twoStats(technical,"OVERALL AVG",speed(metres/Math.max(1,effective/1000d)),"STOPPED",duration(Math.max(0,effective-moving)));
+   twoStats(technical,"PAUSED",duration(pause),"GPS POINTS",String.valueOf(coords.length()));
+   Button detailToggle=button("Technical details   ⌄",surface);block(body,detailToggle,px(44),8);
+   technical.setVisibility(View.GONE);block(body,technical,-2,5);
+   detailToggle.setOnClickListener(v->{boolean opening=technical.getVisibility()!=View.VISIBLE;
+    technical.setVisibility(opening?View.VISIBLE:View.GONE);
+    detailToggle.setText(opening?"Technical details   ⌃":"Technical details   ⌄");
+   });
    String telemetry=c.getString(c.getColumnIndexOrThrow("telemetry"));
    try{JSONArray samples=new JSONArray(telemetry==null?"[]":telemetry);
-    block(body,label(samples.length()==0?"GPS diagnostics unavailable for this older journey":"GPS diagnostics: "+samples.length()+" speed samples",13,muted),-2,9);
+    block(technical,label(samples.length()==0?"GPS diagnostics unavailable for this older journey":"GPS diagnostics: "+samples.length()+" speed samples",13,muted),-2,9);
    }catch(Exception ignored){}
    LinearLayout exports=new LinearLayout(this);
    for(String kind:new String[]{"GPX","CSV","JSON"}){
@@ -379,18 +386,26 @@ public class ModernActivity extends MainActivity {
    block(body,rail,px(11),14);
   }
  }
+ void sectionLabel(LinearLayout parent,String text){
+  TextView label=label(text,11,accent);label.setTypeface(null,1);
+  label.setLetterSpacing(.1f);block(parent,label,-2,9);
+ }
  @Override void showSettings(){
   screen=3;init("Settings");headerSmall(body,"Preferences","Keep DriveTrack simple and personal");
-  Button units=button("Units: "+(miles?"Miles · mph":"Kilometres · km/h"),surface);block(body,units,px(52),10);
+  sectionLabel(body,"DRIVING");
+  Button units=button("Distance units     ·     "+(miles?"Miles / mph":"Kilometres / km/h"),surface);block(body,units,px(52),10);
   units.setOnClickListener(v->{miles=!miles;getPreferences(0).edit().putBoolean("miles",miles).apply();showSettings();});
-  Button awake=button("Keep screen awake while recording: "+(getPreferences(0).getBoolean("keepAwake",true)?"ON":"OFF"),surface);
+  Button awake=button("Keep screen awake     ·     "+(getPreferences(0).getBoolean("keepAwake",true)?"ON":"OFF"),surface);
   block(body,awake,px(52),10);
   awake.setOnClickListener(v->{boolean value=!getPreferences(0).getBoolean("keepAwake",true);getPreferences(0).edit().putBoolean("keepAwake",value).apply();keepAwake=value;updateScreenAwake();showSettings();});
-  Button display=button("Open minimal HUD speedometer",surface);block(body,display,px(52),10);
+  sectionLabel(body,"DISPLAY");
+  Button display=button("Minimal speedometer / HUD   ›",surface);block(body,display,px(52),10);
   display.setOnClickListener(v->{getPreferences(0).edit().putBoolean("hud",true).apply();showDashboard();});
+  sectionLabel(body,"DATA & BACKUP");
   Button export=button("Export all journeys to JSON",surface);block(body,export,px(52),10);export.setOnClickListener(v->exportJourneys());
   Button restore=button("Restore journeys from .db backup",surface);block(body,restore,px(52),12);restore.setOnClickListener(v->importJourneys());
   block(body,label("GPS readings and journey history are stored on-device. Online maps load OpenStreetMap tiles. Exported files may contain precise locations.",13,muted),-2,18);
+  sectionLabel(body,"DATA MANAGEMENT");
   Button cleanup=button("Remove accidental zero-distance entries",surface);block(body,cleanup,px(50),10);
   cleanup.setOnClickListener(v->{
    try(TripStore db=new TripStore(this)){
@@ -404,6 +419,7 @@ public class ModernActivity extends MainActivity {
      }).show();
    }
   });
+  sectionLabel(body,"DANGER ZONE");
   Button delete=button("Delete all journeys",0xff713139);block(body,delete,px(48),12);
   delete.setOnClickListener(v->new AlertDialog.Builder(this).setTitle("Delete all journeys?")
    .setMessage("This permanently deletes stored journeys. Export a backup first.")
