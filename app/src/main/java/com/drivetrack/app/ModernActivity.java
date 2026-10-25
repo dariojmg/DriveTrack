@@ -14,7 +14,7 @@ import java.text.*;
 import org.json.*;
 
 public class ModernActivity extends MainActivity {
- final int ink=0xff0b131b, surface=0xff1c2c38, accent=0xff11d3bb,muted=0xffa5b8c5;
+ final int ink=0xff07111c, surface=0xff122534, accent=0xff09ded0,muted=0xff9cb6c8;
  long selectedId=-1;int exportType=0;int monthOffset=0;String searchTerm="";boolean hud=false;
  static final int DETAIL_EXPORT=880;
  LinearLayout panelRoot; TextView digitalSpeed;boolean keepAwake=true; android.webkit.WebView liveMap;
@@ -30,9 +30,9 @@ public class ModernActivity extends MainActivity {
  }
  Button button(String text,int color){Button b=new Button(this);b.setText(text);b.setAllCaps(false);b.setTextSize(14);b.setTypeface(null,1);b.setTextColor(-1);b.setMinHeight(0);b.setMinimumHeight(0);b.setBackgroundTintList(ColorStateList.valueOf(color));return b;}
  LinearLayout tile(String title,String value){
-  LinearLayout l=vertical();l.setPadding(px(15),px(13),px(14),px(12));l.setBackground(round(surface,20));
+  LinearLayout l=vertical();l.setPadding(px(15),px(13),px(14),px(12));l.setBackground(round(surface,15));
   block(l,label(title,11,muted),-2,6);
-  TextView v=label(value,22,-1);v.setTypeface(null,1);l.addView(v);return l;
+  TextView v=label(value,23,-1);v.setTypeface(null,1);l.addView(v);return l;
  }
  void twoStats(LinearLayout holder,String a,String av,String b,String bv){
   LinearLayout row=new LinearLayout(this);
@@ -57,9 +57,7 @@ public class ModernActivity extends MainActivity {
    back.setOnClickListener(v->goBackFrom(title));
   }
   TextView brand=label("DT  DriveTrack",19,accent);brand.setTypeface(null,1);header.addView(brand,new LinearLayout.LayoutParams(0,-2,1));
-  if(title.equals("Dashboard")){
-   TextView gps=label(TrackingService.active?(TrackingService.paused?"Ⅱ PAUSED":TrackingService.lastFixTime>0?"● RECORDING":"○ ACQUIRING"):"○ WAITING FOR GPS",11,accent);header.addView(gps);
-  }
+
   block(root,header,-2,0);
   body=vertical();body.setPadding(px(12),0,px(12),0);
   if(title.equals("Dashboard")||title.equals("HUD"))root.addView(body,new LinearLayout.LayoutParams(-1,0,1));
@@ -87,13 +85,13 @@ public class ModernActivity extends MainActivity {
   GradientDrawable circle=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
    new int[]{lightenButton(color),color,darkenButton(color)});
   circle.setShape(GradientDrawable.OVAL);
-  circle.setStroke(px(2),0x88ffffff);
+  circle.setStroke(px(2),0xff4cf5e4);
   android.graphics.drawable.RippleDrawable ripple=new android.graphics.drawable.RippleDrawable(
     ColorStateList.valueOf(0x66ffffff),circle,null);
   LinearLayout control=vertical();
   control.setGravity(Gravity.CENTER);
   control.setBackground(ripple);
-  control.setElevation(px(5));
+  control.setElevation(px(9));
   control.setClickable(true);
   control.setFocusable(true);
   control.setOnTouchListener((v,event)->{
@@ -123,7 +121,7 @@ public class ModernActivity extends MainActivity {
   init("Dashboard");
   LinearLayout signal=new LinearLayout(this);signal.setPadding(px(14),px(8),px(14),px(8));signal.setGravity(Gravity.CENTER_VERTICAL);
   signal.setBackground(round(surface,16));
-  signal.addView(label("GPS",11,muted),new LinearLayout.LayoutParams(0,-2,1));
+  signal.addView(label("◉   GPS STATUS",11,muted),new LinearLayout.LayoutParams(0,-2,1));
   gpsValue=label("Acquiring signal",12,accent);signal.addView(gpsValue);
   block(body,signal,px(40),4);
   FrameLayout dial=new FrameLayout(this);
@@ -131,16 +129,16 @@ public class ModernActivity extends MainActivity {
   LinearLayout actions=new LinearLayout(this);actions.setGravity(Gravity.CENTER);
   // Center round console-style controls beneath the dial, consistently in every journey state.
   FrameLayout.LayoutParams frame=new FrameLayout.LayoutParams(-1,px(100),Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL);
-  frame.bottomMargin=px(31);dial.addView(actions,frame);
+  frame.bottomMargin=px(20);dial.addView(actions,frame);
   if(!TrackingService.active){
-   LinearLayout start=roundJourneyControl(R.drawable.ic_drive_start,"START",0xff078c62);
+   LinearLayout start=roundJourneyControl(R.drawable.ic_drive_start,"START",0xff00a898);
    actions.addView(start,new LinearLayout.LayoutParams(px(94),px(94)));
    start.setOnClickListener(v->{if(checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION)!=android.content.pm.PackageManager.PERMISSION_GRANTED)
     requestPermissions(new String[]{android.Manifest.permission.ACCESS_FINE_LOCATION,android.Manifest.permission.ACCESS_COARSE_LOCATION},42);
     else startJourney();});
   }else{
-   LinearLayout pause=roundJourneyControl(TrackingService.paused?R.drawable.ic_drive_resume:R.drawable.ic_drive_pause,TrackingService.paused?"RESUME":"PAUSE",0xffd58a12);
-   LinearLayout stop=roundJourneyControl(R.drawable.ic_drive_stop,"STOP",0xffd63e47);
+   LinearLayout pause=roundJourneyControl(TrackingService.paused?R.drawable.ic_drive_resume:R.drawable.ic_drive_pause,TrackingService.paused?"RESUME":"PAUSE",0xff029d9e);
+   LinearLayout stop=roundJourneyControl(R.drawable.ic_drive_stop,"STOP",0xff087c89);
    LinearLayout.LayoutParams left=new LinearLayout.LayoutParams(px(94),px(94));left.rightMargin=px(14);
    actions.addView(pause,left);actions.addView(stop,new LinearLayout.LayoutParams(px(94),px(94)));
    pause.setOnClickListener(v->{startService(new Intent(this,TrackingService.class).setAction(TrackingService.paused?"RESUME":"PAUSE"));handler.postDelayed(()->showDashboard(),200);});
@@ -151,18 +149,23 @@ public class ModernActivity extends MainActivity {
   boolean showMap=getPreferences(0).getBoolean("showLiveMap",true);
   LinearLayout.LayoutParams dialLayout=new LinearLayout.LayoutParams(-1,0,showMap?1:1.3f);body.addView(dial,dialLayout);
   if(showMap){
-   FrameLayout mini=new FrameLayout(this);mini.setBackground(round(surface,16));
+   FrameLayout mini=new FrameLayout(this);mini.setBackground(round(surface,16));mini.setClipToOutline(true);
    liveMap=new android.webkit.WebView(this);liveMap.setBackgroundColor(surface);
    liveMap.getSettings().setJavaScriptEnabled(true);
    liveMap.getSettings().setDomStorageEnabled(false);
    mini.addView(liveMap,new FrameLayout.LayoutParams(-1,-1));
    View overlay=new View(this);overlay.setClickable(true);overlay.setContentDescription("Open live map");
    mini.addView(overlay,new FrameLayout.LayoutParams(-1,-1));
+   TextView mapNote=label(TrackingService.active?"LIVE MAP   ·   Tap to explore":"LIVE MAP   ·   Starts with your journey",11,0xffc5f5f0);
+   mapNote.setPadding(px(12),px(6),px(12),px(6));mapNote.setBackground(round(0xdd0b1b29,12));
+   FrameLayout.LayoutParams notePosition=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.LEFT);
+   notePosition.leftMargin=px(8);notePosition.topMargin=px(8);mini.addView(mapNote,notePosition);
+
    overlay.setOnClickListener(v->openLiveMap());
-   block(body,mini,px(110),7);
+   block(body,mini,px(126),8);
    String html="<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1,maximum-scale=1'>"
     +"<link rel='stylesheet' href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'>"
-    +"<style>html,body,#m{height:100%;margin:0;background:#172936}</style></head><body><div id='m'></div>"
+    +"<style>html,body,#m{height:100%;margin:0;background:#0b2232}.leaflet-tile-pane{filter:invert(95%) hue-rotate(174deg) brightness(.60) saturate(.85)}.leaflet-control-attribution{display:none}</style></head><body><div id='m'></div>"
     +"<script src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'></script><script>"
     +"var m=L.map('m',{zoomControl:false,dragging:false,touchZoom:false,scrollWheelZoom:false});"
     +"L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:''}).addTo(m);"
@@ -176,7 +179,7 @@ public class ModernActivity extends MainActivity {
   distanceValue=compactCard(dashboardStats,"DISTANCE","0.00 km",true);
   driveTimeValue=compactCard(dashboardStats,"DURATION","00:00",false);
   block(body,dashboardStats,px(83),8);
-  LinearLayout place=tile("CURRENT LOCATION","Waiting for GPS");
+  LinearLayout place=tile("⌖   CURRENT LOCATION","Waiting for GPS");
   currentLocationValue=(TextView)place.getChildAt(1);currentLocationValue.setTextSize(14);currentLocationValue.setSingleLine(true);
   currentLocationValue.setEllipsize(android.text.TextUtils.TruncateAt.END);
   block(body,place,px(71),8);
