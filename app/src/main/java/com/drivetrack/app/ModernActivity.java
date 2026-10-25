@@ -165,7 +165,7 @@ public class ModernActivity extends MainActivity {
    // A vertical shade keeps the speed numerals readable over moving streets.
    View shade=new View(this);
    GradientDrawable overlayShade=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-     new int[]{0xff081827,0xe5081827,0x7a081827,0x18081827});
+     new int[]{0xeb081827,0x98081827,0x36081827,0x08081827});
    shade.setBackground(overlayShade);
    mini.addView(shade,new FrameLayout.LayoutParams(-1,-1));
    View overlay=new View(this);overlay.setClickable(true);overlay.setContentDescription("Open live map");
@@ -189,16 +189,28 @@ public class ModernActivity extends MainActivity {
    pending.setGravity(Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL);pending.setPadding(px(18),0,px(18),px(145));
    mini.addView(pending,new FrameLayout.LayoutParams(-1,-1));
    if(TrackingService.lastFixTime>0&&TrackingService.active)pending.setVisibility(View.GONE);
+   // A north-up, modestly pitched tracking map. No turn-by-turn navigation.
    String html="<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1,maximum-scale=1'>"
-    +"<link rel='stylesheet' href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'>"
-    +"<style>html,body,#m{height:100%;margin:0;background:#2a3138}.leaflet-container{background:#252c33!important}.leaflet-tile-pane{filter:grayscale(1) invert(1) sepia(.3) hue-rotate(145deg) saturate(1.25) brightness(.72) contrast(1.0)}.leaflet-control-attribution{font-size:8px;background:#2a3138bb!important;color:#c6d0d4!important}</style></head><body><div id='m'></div>"
-    +"<script src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'></script><script>"
-    +"var m=L.map('m',{zoomControl:false,dragging:false,touchZoom:false,scrollWheelZoom:false});"
-    +"L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:''}).addTo(m);"
-    +"var trail=L.polyline([],{color:'#12d3bb',weight:4}).addTo(m);var dot=L.circleMarker([53.03,-7.3],{radius:7,color:'#ffffff',fillColor:'#12d3bb',fillOpacity:1});"
-    +"window.moveTo=function(lat,lon){if(!Number.isFinite(lat)||!Number.isFinite(lon))return;"
-    +"if(!m.hasLayer(dot))dot.addTo(m);dot.setLatLng([lat,lon]);m.setView([lat,lon],15,{animate:false});m.invalidateSize();};"
-    +"window.showRoute=function(points){if(!Array.isArray(points))return;trail.setLatLngs(points);if(points.length){let p=points[points.length-1];window.moveTo(p[0],p[1]);}};"
+    +"<link rel='stylesheet' href='https://unpkg.com/maplibre-gl@5.16.0/dist/maplibre-gl.css'>"
+    +"<style>html,body,#m{height:100%;margin:0;background:#2c353b}canvas{outline:none}"
+    +".maplibregl-canvas{filter:brightness(.93) saturate(.83)}"
+    +".maplibregl-control-container{font-size:9px}</style></head><body><div id='m'></div>"
+    +"<script src='https://unpkg.com/maplibre-gl@5.16.0/dist/maplibre-gl.js'></script>"
+    +"<script>var mapReady=false,queued=null;"
+    +"var style={version:8,sources:{streets:{type:'raster',tiles:['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],tileSize:256,attribution:'&copy; OpenStreetMap contributors'}},layers:[{id:'streets',type:'raster',source:'streets',paint:{'raster-brightness-min':0.1,'raster-brightness-max':0.73,'raster-saturation':-0.65,'raster-contrast':0.04}}]};"
+    +"try{var m=new maplibregl.Map({container:'m',style:style,center:[-7.3,53.03],zoom:14,pitch:38,bearing:0,interactive:false,attributionControl:true});"
+    +"m.on('load',function(){mapReady=true;m.addSource('route',{type:'geojson',data:{type:'Feature',geometry:{type:'LineString',coordinates:[]},properties:{}}});"
+    +"m.addLayer({id:'trace',type:'line',source:'route',paint:{'line-color':'#09ded0','line-width':4,'line-opacity':0.97}});"
+    +"m.addSource('position',{type:'geojson',data:{type:'Feature',geometry:{type:'Point',coordinates:[-7.3,53.03]},properties:{}}});"
+    +"m.addLayer({id:'position',type:'circle',source:'position',paint:{'circle-radius':6,'circle-color':'#09ded0','circle-stroke-width':2,'circle-stroke-color':'#ffffff'}});"
+    +"if(queued)window.showRoute(queued);});"
+    +"window.showRoute=function(points){if(!Array.isArray(points)||!points.length)return;queued=points;"
+    +"if(!mapReady)return;var coords=points.filter(p=>Array.isArray(p)&&p.length>=2&&Number.isFinite(p[0])&&Number.isFinite(p[1])).map(p=>[p[1],p[0]]);"
+    +"if(!coords.length)return;var last=coords[coords.length-1];m.getSource('route').setData({type:'Feature',geometry:{type:'LineString',coordinates:coords},properties:{}});"
+    +"m.getSource('position').setData({type:'Feature',geometry:{type:'Point',coordinates:last},properties:{}});"
+    +"m.jumpTo({center:last,zoom:15,pitch:38,bearing:0});};"
+    +"window.moveTo=function(lat,lon){if(Number.isFinite(lat)&&Number.isFinite(lon))window.showRoute([[lat,lon]]);};"
+    +"}catch(e){document.getElementById('m').innerHTML='<div style=\\"color:#cad5d9;padding:20px;text-align:center;font:13px sans-serif\\">Map unavailable — GPS recording is unaffected</div>';}"
     +"</script></body></html>";
    liveMap.loadDataWithBaseURL("https://appassets.androidplatform.net/",html,"text/html","UTF-8",null);
   }else {liveMap=null;mapPending=null;}
