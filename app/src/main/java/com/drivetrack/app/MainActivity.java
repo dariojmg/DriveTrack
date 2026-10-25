@@ -230,27 +230,44 @@ public class MainActivity extends Activity {
   map.loadDataWithBaseURL("https://appassets.androidplatform.net/",html,"text/html","UTF-8",null);
  }
  class Gauge extends View{
-  Paint p=new Paint(3);Gauge(Context c){super(c);}
-  protected void onDraw(Canvas c){super.onDraw(c);
-   float w=getWidth(),h=getHeight();
-   float usable=Math.max(dp(120),h-dp(53));
-   float cx=w/2,cy=usable*.54f;
-   float r=Math.max(dp(35),Math.min(w*.39f,Math.min(cy-dp(14),usable-cy-dp(9))));
-   float display=(float)(TrackingService.currentSpeed*(miles?2.236936:3.6)),max=miles?120:200;
-   p.setStyle(Paint.Style.STROKE);p.setStrokeCap(Paint.Cap.ROUND);p.setStrokeWidth(dp(10));p.setColor(panel);
+  final Paint p=new Paint(3);
+  Gauge(Context ctx){super(ctx);setLayerType(View.LAYER_TYPE_SOFTWARE,null);}
+  @Override protected void onDraw(Canvas c){
+   super.onDraw(c);
+   float w=getWidth(),h=getHeight(),cx=w/2f,cy=h*.34f;
+   float r=Math.min(w*.425f,h*.335f);
+   float speed=(float)(TrackingService.currentSpeed*(miles?2.236936:3.6)),maximum=miles?120:160;
+   float fraction=Math.min(1,Math.max(0,speed/maximum));
+   p.setStyle(Paint.Style.STROKE);p.setStrokeCap(Paint.Cap.ROUND);
+   p.setStrokeWidth(dp(12));p.setColor(0xff233a4b);
    c.drawArc(cx-r,cy-r,cx+r,cy+r,140,260,false,p);
-   p.setColor(teal);c.drawArc(cx-r,cy-r,cx+r,cy+r,140,260*Math.min(1,display/max),false,p);
-   for(int i=0;i<=10;i++){double a=Math.toRadians(140+260*i/10.0);
-    float x1=cx+(r-dp(24))*(float)Math.cos(a),y1=cy+(r-dp(24))*(float)Math.sin(a);
-    float x2=cx+(r-dp(13))*(float)Math.cos(a),y2=cy+(r-dp(13))*(float)Math.sin(a);
-    p.setStrokeWidth(dp(2));p.setColor(0xff8ca7b6);c.drawLine(x1,y1,x2,y2,p);
+   p.setColor(0x7700d9d0);p.setStrokeWidth(dp(18));p.setShadowLayer(dp(10),0,0,0x8800e7d6);
+   c.drawArc(cx-r,cy-r,cx+r,cy+r,140,260*fraction,false,p);
+   p.clearShadowLayer();
+   p.setColor(0xff10dfca);p.setStrokeWidth(dp(9));
+   c.drawArc(cx-r,cy-r,cx+r,cy+r,140,260*fraction,false,p);
+   for(int i=0;i<=40;i++){
+    double angle=Math.toRadians(140+260*i/40d);
+    boolean major=i%5==0;
+    float a=r-dp(major?23:17),b=r-dp(10);
+    p.setStrokeWidth(dp(major?2:1));p.setColor(major?0xffc0e2ed:0xff537080);
+    c.drawLine(cx+a*(float)Math.cos(angle),cy+a*(float)Math.sin(angle),
+       cx+b*(float)Math.cos(angle),cy+b*(float)Math.sin(angle),p);
    }
-   double a=Math.toRadians(140+260*Math.min(1,Math.max(0,display/max)));
-   p.setStrokeWidth(dp(4));p.setColor(0xffffffff);c.drawLine(cx,cy,cx+(r-dp(32))*(float)Math.cos(a),cy+(r-dp(32))*(float)Math.sin(a),p);
-   p.setStyle(Paint.Style.FILL);p.setColor(teal);c.drawCircle(cx,cy,dp(7),p);
-   p.setTextAlign(Paint.Align.CENTER);p.setTextSize(Math.min(dp(54),r*.52f));p.setColor(0xffffffff);c.drawText(""+Math.round(display),cx,cy+Math.min(dp(63),r*.63f),p);
-   p.setTextSize(dp(16));p.setColor(0xffa0b4c3);c.drawText(miles?"mph":"km/h",cx,cy+Math.min(dp(84),r*.87f),p);
-   p.setTextSize(dp(12));c.drawText("CURRENT SPEED",cx,cy-Math.min(dp(38),r*.40f),p);
+   p.setStyle(Paint.Style.FILL);p.setTypeface(Typeface.create("sans-serif",Typeface.NORMAL));
+   p.setTextAlign(Paint.Align.CENTER);p.setTextSize(dp(11));p.setColor(0xffabc7d9);
+   for(int i=0;i<=8;i++){
+    double angle=Math.toRadians(140+260*i/8d);
+    float rr=r-dp(42);
+    c.drawText(String.valueOf(Math.round(maximum*i/8f)),cx+rr*(float)Math.cos(angle),
+      cy+rr*(float)Math.sin(angle)+dp(4),p);
+   }
+   // Centered instrument speed takes precedence over decorative needle.
+   p.setColor(0xff9dbac8);p.setTextSize(dp(11));c.drawText("CURRENT SPEED",cx,cy-dp(34),p);
+   p.setColor(Color.WHITE);p.setTypeface(Typeface.create("sans-serif-medium",Typeface.BOLD));
+   p.setTextSize(dp(66));c.drawText(String.valueOf(Math.round(speed)),cx,cy+dp(35),p);
+   p.setTypeface(Typeface.DEFAULT);p.setColor(0xffb6ccd5);p.setTextSize(dp(15));
+   c.drawText(miles?"mph":"km/h",cx,cy+dp(58),p);
   }
  }
  class RouteView extends View{
