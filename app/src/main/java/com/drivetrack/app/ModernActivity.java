@@ -132,6 +132,7 @@ public class ModernActivity extends MainActivity {
   FrameLayout dial=new FrameLayout(this);
   dial.setBackground(round(0xff081827,22));dial.setClipToOutline(true);
   gauge=new Gauge(this);dial.addView(gauge,new FrameLayout.LayoutParams(-1,-1));
+  gauge.setAlpha(0f);gauge.post(()->gauge.animate().alpha(1f).setDuration(360).start());
   LinearLayout actions=new LinearLayout(this);actions.setGravity(Gravity.CENTER);
   // Center round console-style controls beneath the dial, consistently in every journey state.
   FrameLayout.LayoutParams frame=new FrameLayout.LayoutParams(-1,px(100),Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL);
@@ -161,23 +162,36 @@ public class ModernActivity extends MainActivity {
    liveMap.getSettings().setJavaScriptEnabled(true);
    liveMap.getSettings().setDomStorageEnabled(false);
    mini.addView(liveMap,new FrameLayout.LayoutParams(-1,-1));
+   // A vertical shade keeps the speed numerals readable over moving streets.
+   View shade=new View(this);
+   GradientDrawable overlayShade=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+     new int[]{0xff081827,0xe5081827,0x7a081827,0x18081827});
+   shade.setBackground(overlayShade);
+   mini.addView(shade,new FrameLayout.LayoutParams(-1,-1));
    View overlay=new View(this);overlay.setClickable(true);overlay.setContentDescription("Open live map");
    mini.addView(overlay,new FrameLayout.LayoutParams(-1,-1));
-   TextView mapNote=label(TrackingService.active?"● LIVE LOCATION":"⌖ LOCATION MAP",11,0xffc5f5f0);
+   TextView mapNote=label("● LIVE ROUTE",11,0xffc5f5f0);
    mapNote.setPadding(px(12),px(6),px(12),px(6));mapNote.setBackground(round(0xdd0b1b29,12));
-   FrameLayout.LayoutParams notePosition=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.LEFT);
-   notePosition.leftMargin=px(8);notePosition.topMargin=px(8);mini.addView(mapNote,notePosition);
+   FrameLayout.LayoutParams notePosition=new FrameLayout.LayoutParams(-2,-2,Gravity.BOTTOM|Gravity.LEFT);
+   notePosition.leftMargin=px(10);notePosition.bottomMargin=px(9);mini.addView(mapNote,notePosition);
 
    overlay.setOnClickListener(v->openLiveMap());
-   // A real, separate map viewport is never covered by the gauge or controls.
-   block(body,mini,px(112),8);
+   // Slide the live map into the lower cockpit, underneath the gauge and controls.
+   FrameLayout.LayoutParams mapLayout=new FrameLayout.LayoutParams(-1,-1);
+   dial.addView(mini,0,mapLayout);
+   mini.setAlpha(0f);
+   mini.post(()->{
+    mini.setTranslationY(px(130));
+    mini.animate().translationY(0).alpha(1f).setDuration(580)
+      .setInterpolator(new android.view.animation.DecelerateInterpolator()).start();
+   });
    TextView pending=label("Map available when GPS location is acquired",12,0xffaec6d4);mapPending=pending;
-   pending.setGravity(Gravity.CENTER);pending.setPadding(px(8),px(34),px(8),0);
+   pending.setGravity(Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL);pending.setPadding(px(8),0,px(8),px(120));
    mini.addView(pending,new FrameLayout.LayoutParams(-1,-1));
    if(TrackingService.lastFixTime>0&&TrackingService.active)pending.setVisibility(View.GONE);
    String html="<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1,maximum-scale=1'>"
     +"<link rel='stylesheet' href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'>"
-    +"<style>html,body,#m{height:100%;margin:0;background:#0b2232}.leaflet-tile-pane{filter:grayscale(1) invert(1) sepia(.3) hue-rotate(145deg) saturate(1.25) brightness(.44) contrast(1.2)}.leaflet-control-attribution{font-size:8px;background:#0b2232bb!important;color:#a3c3cb!important}</style></head><body><div id='m'></div>"
+    +"<style>html,body,#m{height:100%;margin:0;background:#0b2232}.leaflet-container{background:#07151e!important}.leaflet-tile-pane{filter:grayscale(1) invert(1) sepia(.3) hue-rotate(145deg) saturate(1.25) brightness(.44) contrast(1.2)}.leaflet-control-attribution{font-size:8px;background:#0b2232bb!important;color:#a3c3cb!important}</style></head><body><div id='m'></div>"
     +"<script src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'></script><script>"
     +"var m=L.map('m',{zoomControl:false,dragging:false,touchZoom:false,scrollWheelZoom:false});"
     +"L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:''}).addTo(m);"
