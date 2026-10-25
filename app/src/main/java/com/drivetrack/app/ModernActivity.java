@@ -210,7 +210,7 @@ public class ModernActivity extends MainActivity {
     +"m.getSource('position').setData({type:'Feature',geometry:{type:'Point',coordinates:last},properties:{}});"
     +"m.jumpTo({center:last,zoom:15,pitch:38,bearing:0});};"
     +"window.moveTo=function(lat,lon){if(Number.isFinite(lat)&&Number.isFinite(lon))window.showRoute([[lat,lon]]);};"
-    +"}catch(e){document.getElementById('m').innerHTML='<div style=\\"color:#cad5d9;padding:20px;text-align:center;font:13px sans-serif\\">Map unavailable — GPS recording is unaffected</div>';}"
+    +"}catch(e){document.getElementById('m').textContent='Map unavailable; journey recording is unaffected';}"
     +"</script></body></html>";
    liveMap.loadDataWithBaseURL("https://appassets.androidplatform.net/",html,"text/html","UTF-8",null);
   }else {liveMap=null;mapPending=null;}
