@@ -155,7 +155,8 @@ public class ModernActivity extends MainActivity {
   }
   boolean showMap=getPreferences(0).getBoolean("showLiveMap",true);
   // Let the dial take remaining space; map and stats retain guaranteed heights.
-  LinearLayout.LayoutParams dialLayout=new LinearLayout.LayoutParams(-1,0,1);body.addView(dial,dialLayout);
+  LinearLayout.LayoutParams dialLayout=new LinearLayout.LayoutParams(-1,0,1);dialLayout.bottomMargin=px(11);body.addView(dial,dialLayout);
+  dial.setElevation(px(3));
   if(showMap){
    FrameLayout mini=new FrameLayout(this);mini.setBackground(round(0xff0a2434,16));mini.setClipToOutline(true);
    liveMap=new android.webkit.WebView(this);liveMap.setBackgroundColor(surface);
@@ -165,7 +166,7 @@ public class ModernActivity extends MainActivity {
    // A vertical shade keeps the speed numerals readable over moving streets.
    View shade=new View(this);
    GradientDrawable overlayShade=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-     new int[]{0xeb081827,0x98081827,0x36081827,0x08081827});
+     new int[]{0xd5081827,0x72081827,0x18081827,0x00081827});
    shade.setBackground(overlayShade);
    mini.addView(shade,new FrameLayout.LayoutParams(-1,-1));
    View overlay=new View(this);overlay.setClickable(true);overlay.setContentDescription("Open live map");
@@ -189,35 +190,32 @@ public class ModernActivity extends MainActivity {
    pending.setGravity(Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL);pending.setPadding(px(18),0,px(18),px(145));
    mini.addView(pending,new FrameLayout.LayoutParams(-1,-1));
    if(TrackingService.lastFixTime>0&&TrackingService.active)pending.setVisibility(View.GONE);
-   // A north-up, modestly pitched tracking map. No turn-by-turn navigation.
+   // History-proven renderer. Static north-up camera tracks latest GPS point.
    String html="<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1,maximum-scale=1'>"
-    +"<link rel='stylesheet' href='https://unpkg.com/maplibre-gl@6.15.0/dist/maplibre-gl.css'>"
-    +"<style>html,body,#m{height:100%;margin:0;background:#2c353b}canvas{outline:none}"
-    +".maplibregl-canvas{filter:brightness(.93) saturate(.83)}"
-    +".maplibregl-control-container{font-size:9px}</style></head><body><div id='m'></div>"
-    +"<script src='https://unpkg.com/maplibre-gl@6.15.0/dist/maplibre-gl.js'></script>"
-    +"<script>var mapReady=false,queued=null;"
-    +"var style={version:8,sources:{streets:{type:'raster',tiles:['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],tileSize:256,attribution:'&copy; OpenStreetMap contributors'}},layers:[{id:'streets',type:'raster',source:'streets',paint:{'raster-brightness-min':0.1,'raster-brightness-max':0.73,'raster-saturation':-0.65,'raster-contrast':0.04}}]};"
-    +"try{var m=new maplibregl.Map({container:'m',style:style,center:[-7.3,53.03],zoom:14,pitch:38,bearing:0,interactive:false,attributionControl:true});"
-    +"m.on('load',function(){mapReady=true;m.addSource('route',{type:'geojson',data:{type:'Feature',geometry:{type:'LineString',coordinates:[]},properties:{}}});"
-    +"m.addLayer({id:'trace',type:'line',source:'route',paint:{'line-color':'#09ded0','line-width':4,'line-opacity':0.97}});"
-    +"m.addSource('position',{type:'geojson',data:{type:'Feature',geometry:{type:'Point',coordinates:[-7.3,53.03]},properties:{}}});"
-    +"m.addLayer({id:'position',type:'circle',source:'position',paint:{'circle-radius':6,'circle-color':'#09ded0','circle-stroke-width':2,'circle-stroke-color':'#ffffff'}});"
-    +"if(queued)window.showRoute(queued);});"
-    +"window.showRoute=function(points){if(!Array.isArray(points)||!points.length)return;queued=points;"
-    +"if(!mapReady)return;var coords=points.filter(p=>Array.isArray(p)&&p.length>=2&&Number.isFinite(p[0])&&Number.isFinite(p[1])).map(p=>[p[1],p[0]]);"
-    +"if(!coords.length)return;var last=coords[coords.length-1];m.getSource('route').setData({type:'Feature',geometry:{type:'LineString',coordinates:coords},properties:{}});"
-    +"m.getSource('position').setData({type:'Feature',geometry:{type:'Point',coordinates:last},properties:{}});"
-    +"m.jumpTo({center:last,zoom:15,pitch:38,bearing:0});};"
+    +"<link rel='stylesheet' href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'>"
+    +"<style>html,body,#m{height:100%;width:100%;margin:0;background:#303942}.leaflet-container{background:#303942!important}"
+    +".leaflet-tile-pane{filter:grayscale(1) invert(1) sepia(.2) hue-rotate(148deg) saturate(.75) brightness(.82) contrast(.92)}"
+    +".leaflet-control-attribution{font-size:8px;background:#303942cc!important;color:#d2dee2!important}</style></head>"
+    +"<body><div id='m'></div><script src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'></script>"
+    +"<script>try{var m=L.map('m',{zoomControl:false,dragging:false,touchZoom:false,scrollWheelZoom:false});"
+    +"L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'&copy; OpenStreetMap contributors'}).addTo(m);"
+    +"var route=L.polyline([],{color:'#09ded0',weight:5,opacity:1}).addTo(m);"
+    +"var dot=L.circleMarker([53.03,-7.3],{radius:7,color:'#ffffff',weight:2,fillColor:'#09ded0',fillOpacity:1});"
+    +"window.showRoute=function(points){if(!Array.isArray(points)||!points.length)return;"
+    +"var clean=points.filter(p=>Array.isArray(p)&&p.length>=2&&Number.isFinite(p[0])&&Number.isFinite(p[1]));"
+    +"if(!clean.length)return;route.setLatLngs(clean);var p=clean[clean.length-1];dot.setLatLng(p);"
+    +"if(!m.hasLayer(dot))dot.addTo(m);m.setView(p,15,{animate:false});m.invalidateSize();};"
     +"window.moveTo=function(lat,lon){if(Number.isFinite(lat)&&Number.isFinite(lon))window.showRoute([[lat,lon]]);};"
-    +"}catch(e){document.getElementById('m').textContent='Map unavailable; journey recording is unaffected';}"
+    +"m.setView([53.03,-7.3],13);setTimeout(function(){m.invalidateSize();},250);"
+    +"}catch(err){document.getElementById('m').textContent='Map unavailable; journey recording continues';}"
     +"</script></body></html>";
    liveMap.loadDataWithBaseURL("https://appassets.androidplatform.net/",html,"text/html","UTF-8",null);
   }else {liveMap=null;mapPending=null;}
   dashboardStats=new LinearLayout(this);
   distanceValue=compactCard(dashboardStats,"DISTANCE","0.00 km",true);
   driveTimeValue=compactCard(dashboardStats,"DURATION","00:00",false);
-  block(body,dashboardStats,px(68),7);
+  dashboardStats.setPadding(px(1),px(2),px(1),0);
+  block(body,dashboardStats,px(70),8);
   LinearLayout place=tile("⌖   CURRENT LOCATION","Waiting for GPS");place.setPadding(px(15),px(8),px(14),px(7));
   currentLocationValue=(TextView)place.getChildAt(1);currentLocationValue.setTextSize(14);currentLocationValue.setSingleLine(true);
   currentLocationValue.setEllipsize(android.text.TextUtils.TruncateAt.END);
@@ -244,19 +242,61 @@ public class ModernActivity extends MainActivity {
     requestPermissions(new String[]{android.Manifest.permission.ACCESS_FINE_LOCATION,android.Manifest.permission.ACCESS_COARSE_LOCATION},42);
    else startJourney();
   }).start();});
-  LinearLayout recent=vertical();recent.setPadding(px(18),px(14),px(18),px(12));recent.setBackground(round(surface,17));
-  TextView recentTitle=label("LAST JOURNEY",11,muted);recentTitle.setLetterSpacing(.1f);block(recent,recentTitle,-2,8);
-  String summary="No recorded journeys yet";
+  LinearLayout recent=vertical();recent.setPadding(px(15),px(13),px(15),px(12));recent.setBackground(round(surface,19));recent.setElevation(px(4));
+  LinearLayout top=new LinearLayout(this);top.setGravity(Gravity.CENTER_VERTICAL);
+  TextView recentTitle=label("↗  LAST JOURNEY",11,accent);recentTitle.setLetterSpacing(.1f);
+  top.addView(recentTitle,new LinearLayout.LayoutParams(0,-2,1));
+  top.addView(label("VIEW HISTORY  ›",10,muted));
+  block(recent,top,-2,6);
+  String summary="No recorded journeys yet",when="Complete a journey to see your route";
+  JSONArray trace=null;
   try(TripStore db=new TripStore(this);Cursor cursor=db.all()){
    if(cursor.moveToFirst()){
     double d=cursor.getDouble(cursor.getColumnIndexOrThrow("distance"));
     long startMs=cursor.getLong(cursor.getColumnIndexOrThrow("started"));
     long endMs=cursor.getLong(cursor.getColumnIndexOrThrow("ended"));
-    summary=dist(d)+"   ·   "+duration(Math.max(0,endMs-startMs));
+    summary=dist(d)+"   •   "+duration(Math.max(0,endMs-startMs));
+    when=date(startMs);
+    trace=new JSONArray(cursor.getString(cursor.getColumnIndexOrThrow("points")));
    }
   }catch(Exception ignored){}
-  TextView last=label(summary,19,Color.WHITE);last.setTypeface(null,1);block(recent,last,-2,0);
-  block(body,recent,px(93),12);recent.setOnClickListener(v->showHistory());
+  LinearLayout content=new LinearLayout(this);content.setGravity(Gravity.CENTER_VERTICAL);
+  LinearLayout detail=vertical();
+  TextView last=label(summary,19,Color.WHITE);last.setTypeface(null,1);block(detail,last,-2,5);
+  TextView caption=label(when,11,muted);caption.setSingleLine(true);caption.setEllipsize(android.text.TextUtils.TruncateAt.END);
+  block(detail,caption,-2,0);
+  content.addView(detail,new LinearLayout.LayoutParams(0,-2,1));
+  RouteSpark spark=new RouteSpark(this,trace);
+  LinearLayout.LayoutParams imageSize=new LinearLayout.LayoutParams(px(106),px(62));imageSize.leftMargin=px(8);
+  content.addView(spark,imageSize);
+  block(recent,content,px(69),0);
+  block(body,recent,px(120),12);recent.setOnClickListener(v->showHistory());
+ }
+ class RouteSpark extends View {
+  final JSONArray pts; final Paint pen=new Paint(3);
+  RouteSpark(Context c,JSONArray p){super(c);pts=p;setBackground(round(0xff1b3440,12));}
+  @Override protected void onDraw(Canvas canvas){
+   super.onDraw(canvas);int count=pts==null?0:pts.length();
+   float w=getWidth(),h=getHeight();
+   pen.setStyle(Paint.Style.STROKE);pen.setStrokeWidth(px(1));pen.setColor(0x3355a3ae);
+   for(int i=1;i<=2;i++)canvas.drawLine(px(7),h*i/3,w-px(7),h*i/3,pen);
+   if(count<2)return;
+   try{
+    double minLat=90,maxLat=-90,minLon=180,maxLon=-180;
+    for(int i=0;i<count;i++){JSONArray pt=pts.getJSONArray(i);double lat=pt.getDouble(0),lon=pt.getDouble(1);
+     minLat=Math.min(minLat,lat);maxLat=Math.max(maxLat,lat);minLon=Math.min(minLon,lon);maxLon=Math.max(maxLon,lon);}
+    double scale=Math.min((w-px(18))/Math.max(.00001,maxLon-minLon),(h-px(16))/Math.max(.00001,maxLat-minLat));
+    Path line=new Path();float firstX=0,firstY=0,lastX=0,lastY=0;
+    for(int i=0;i<count;i++){JSONArray pt=pts.getJSONArray(i);
+     float x=(float)(w/2+(pt.getDouble(1)-(minLon+maxLon)/2)*scale);
+     float y=(float)(h/2-(pt.getDouble(0)-(minLat+maxLat)/2)*scale);
+     if(i==0){line.moveTo(x,y);firstX=x;firstY=y;}else line.lineTo(x,y);lastX=x;lastY=y;}
+    pen.setStyle(Paint.Style.STROKE);pen.setColor(accent);pen.setStrokeWidth(px(3));pen.setStrokeCap(Paint.Cap.ROUND);
+    pen.setStrokeJoin(Paint.Join.ROUND);canvas.drawPath(line,pen);
+    pen.setStyle(Paint.Style.FILL);pen.setColor(accent);canvas.drawCircle(firstX,firstY,px(3),pen);
+    pen.setColor(0xffff637b);canvas.drawCircle(lastX,lastY,px(3),pen);
+   }catch(Exception ignored){}
+  }
  }
  @Override void updateDashboard(){
   updateScreenAwake();
