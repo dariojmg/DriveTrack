@@ -243,7 +243,7 @@ public class ModernActivity extends MainActivity {
     totalMs+=Math.max(0,c.getLong(c.getColumnIndexOrThrow("ended"))-c.getLong(c.getColumnIndexOrThrow("started"))-c.getLong(c.getColumnIndexOrThrow("pausedms")));
    }
    twoStats(body,"TOTAL DISTANCE",dist(sum),"JOURNEYS",String.valueOf(count));
-   TextView drivingTime=label("Total drive time  ·  "+duration(totalMs),13,muted);block(body,drivingTime,-2,12);
+   TextView drivingTime=label("◷   "+duration(totalMs)+" recorded drive time",13,muted);block(body,drivingTime,-2,12);
   }
 
   LinearLayout filters=new LinearLayout(this);
@@ -275,17 +275,22 @@ public class ModernActivity extends MainActivity {
      String dis=dist(c.getDouble(c.getColumnIndexOrThrow("distance")));
      double max=c.getDouble(c.getColumnIndexOrThrow("maxspeed"));
      long time=c.getLong(c.getColumnIndexOrThrow("ended"))-start-c.getLong(c.getColumnIndexOrThrow("pausedms"));
-     LinearLayout card=vertical();card.setPadding(px(14),px(12),px(14),px(12));card.setBackground(round(surface,21));
+     LinearLayout card=new LinearLayout(this);card.setGravity(Gravity.CENTER_VERTICAL);card.setPadding(px(9),px(9),px(10),px(9));card.setBackground(round(surface,17));
+     String geojson=c.getString(c.getColumnIndexOrThrow("points"));
+     View thumbnail=new RouteThumbnail(this,geojson);
+     LinearLayout.LayoutParams thumbLp=new LinearLayout.LayoutParams(px(78),px(82));thumbLp.rightMargin=px(12);
+     card.addView(thumbnail,thumbLp);
+     LinearLayout info=vertical();card.addView(info,new LinearLayout.LayoutParams(0,-2,1));
      LinearLayout heading=new LinearLayout(this);heading.setGravity(Gravity.CENTER_VERTICAL);
      TextView tripName=label(title,17,-1);tripName.setTypeface(null,1);
      heading.addView(tripName,new LinearLayout.LayoutParams(0,-2,1));
      TextView menu=label("⋮",25,muted);menu.setGravity(Gravity.CENTER);
      menu.setContentDescription("Options for "+title);menu.setClickable(true);
      heading.addView(menu,new LinearLayout.LayoutParams(px(44),px(42)));
-     block(card,heading,-2,2);
-     block(card,label(date(start)+"    ·    "+duration(time),12,muted),-2,7);
-     block(card,label(dis+"     •     Max "+speed(max),14,accent),-2,0);
-     block(entries,card,-2,8);
+     block(info,heading,-2,2);
+     block(info,label(date(start)+"   ·   "+duration(time),11,muted),-2,7);
+     TextView figures=label(dis+"   ·   "+speed(max)+" max",13,accent);figures.setTypeface(null,1);block(info,figures,-2,0);
+     block(entries,card,px(104),8);
      card.setOnClickListener(v->showDetail(id));
      menu.setOnClickListener(v->{
       PopupMenu popup=new PopupMenu(this,menu);
@@ -432,6 +437,28 @@ public class ModernActivity extends MainActivity {
    View fill=new View(this);fill.setBackground(round(accent,8));
    rail.addView(fill,new LinearLayout.LayoutParams(Math.max(px(3),(int)(getResources().getDisplayMetrics().widthPixels*.77*item.getValue()/maxMonth)),px(11)));
    block(body,rail,px(11),14);
+  }
+ }
+ class RouteThumbnail extends View {
+  final Paint pen=new Paint(3);final JSONArray coords;
+  RouteThumbnail(Context ctx,String serialized){super(ctx);JSONArray parsed;try{parsed=new JSONArray(serialized==null?"[]":serialized);}catch(Exception ex){parsed=new JSONArray();}coords=parsed;setBackground(round(0xff0b1b2b,13));setClipToOutline(true);}
+  protected void onDraw(Canvas canvas){super.onDraw(canvas);float w=getWidth(),h=getHeight();
+   pen.setColor(0xff1e3b4e);pen.setStrokeWidth(px(1));pen.setStyle(Paint.Style.STROKE);
+   for(int i=1;i<4;i++){canvas.drawLine(w*i/4f,0,w*i/4f,h,pen);canvas.drawLine(0,h*i/4f,w,h*i/4f,pen);}
+   if(coords.length()<2)return;
+   try{double minLat=90,maxLat=-90,minLon=180,maxLon=-180;
+    for(int i=0;i<coords.length();i++){JSONArray p=coords.getJSONArray(i);double lat=p.getDouble(0),lon=p.getDouble(1);minLat=Math.min(minLat,lat);maxLat=Math.max(maxLat,lat);minLon=Math.min(minLon,lon);maxLon=Math.max(maxLon,lon);}
+    double lonStretch=Math.max(.00001,(maxLon-minLon)*Math.cos(Math.toRadians((maxLat+minLat)/2)));
+    double latSpan=Math.max(.00001,maxLat-minLat);
+    Path path=new Path();float firstX=0,firstY=0,lastX=0,lastY=0;
+    for(int i=0;i<coords.length();i++){JSONArray p=coords.getJSONArray(i);
+     float x=(float)(px(10)+(w-px(20))*((p.getDouble(1)-minLon)*Math.cos(Math.toRadians((maxLat+minLat)/2))/lonStretch));
+     float y=(float)(px(10)+(h-px(20))*(1-(p.getDouble(0)-minLat)/latSpan));
+     if(i==0){path.moveTo(x,y);firstX=x;firstY=y;}else path.lineTo(x,y);lastX=x;lastY=y;}
+    pen.setStrokeWidth(px(3));pen.setStrokeCap(Paint.Cap.ROUND);pen.setStrokeJoin(Paint.Join.ROUND);pen.setColor(accent);canvas.drawPath(path,pen);
+    pen.setStyle(Paint.Style.FILL);pen.setColor(0xff61e8cc);canvas.drawCircle(firstX,firstY,px(4),pen);
+    pen.setColor(0xfff9a1a9);canvas.drawCircle(lastX,lastY,px(4),pen);pen.setStyle(Paint.Style.STROKE);
+   }catch(Exception ignored){}
   }
  }
  void switchRow(LinearLayout parent,String title,String subtitle,String key,boolean initial,Runnable changed){
