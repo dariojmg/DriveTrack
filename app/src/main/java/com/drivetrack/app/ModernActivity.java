@@ -25,12 +25,12 @@ public class ModernActivity extends MainActivity {
   DialScrim(Context c){super(c);setClickable(false);setFocusable(false);}
   @Override protected void onDraw(Canvas canvas){
    float w=getWidth(),h=getHeight();
-   float radius=Math.min(w*.47f,h*.39f);
+   float radius=Math.min(w*.45f,h*.37f);
    if(radius<=0)return;
-   paint.setShader(new RadialGradient(w/2f,h*.34f,radius,
+   paint.setShader(new RadialGradient(w/2f,h*.36f,radius,
       new int[]{0xe8081827,0xc8081827,0x9a081827,0x00081827},
       new float[]{0f,.49f,.72f,1f},Shader.TileMode.CLAMP));
-   canvas.drawCircle(w/2f,h*.34f,radius,paint);
+   canvas.drawCircle(w/2f,h*.36f,radius,paint);
    paint.setShader(null);
   }
  }
@@ -129,6 +129,28 @@ public class ModernActivity extends MainActivity {
   control.addView(caption,new LinearLayout.LayoutParams(-1,px(21)));
   return control;
  }
+ LinearLayout journeyPill(int drawable,String title,int colour){
+  LinearLayout pill=new LinearLayout(this);pill.setGravity(Gravity.CENTER);
+  pill.setOrientation(LinearLayout.HORIZONTAL);pill.setPadding(px(12),0,px(12),0);
+  GradientDrawable back=round(colour,28);back.setStroke(px(1),0xff4ad7d0);
+  pill.setBackground(new android.graphics.drawable.RippleDrawable(ColorStateList.valueOf(0x55ffffff),back,null));
+  pill.setClickable(true);pill.setFocusable(true);pill.setMinimumHeight(px(54));
+  pill.setElevation(px(3));pill.setContentDescription(title+" journey");
+  ImageView icon=new ImageView(this);icon.setImageResource(drawable);
+  icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
+  pill.addView(icon,new LinearLayout.LayoutParams(px(21),px(23)));
+  TextView text=label(title,14,Color.WHITE);text.setTypeface(null,1);
+  LinearLayout.LayoutParams space=new LinearLayout.LayoutParams(-2,-2);space.leftMargin=px(8);pill.addView(text,space);
+  pill.setOnTouchListener((v,event)->{
+   int action=event.getActionMasked();
+   if(action==MotionEvent.ACTION_DOWN&&motionEnabled())v.animate().scaleX(.97f).scaleY(.95f).setDuration(95).start();
+   if(action==MotionEvent.ACTION_UP||action==MotionEvent.ACTION_CANCEL){
+    if(motionEnabled())v.animate().scaleX(1f).scaleY(1f).setDuration(150).start();
+    if(action==MotionEvent.ACTION_UP)v.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP);
+   }return false;
+  });
+  return pill;
+ }
  int lightenButton(int color){return Color.rgb(Math.min(255,Color.red(color)+34),Math.min(255,Color.green(color)+34),Math.min(255,Color.blue(color)+34));}
  int darkenButton(int color){return Color.rgb((int)(Color.red(color)*.74),(int)(Color.green(color)*.74),(int)(Color.blue(color)*.74));}
  @Override void showDashboard(){
@@ -152,8 +174,9 @@ public class ModernActivity extends MainActivity {
   if(motionEnabled()){gauge.setAlpha(0f);gauge.post(()->gauge.animate().alpha(1f).setDuration(275).start());}
   LinearLayout actions=new LinearLayout(this);actions.setGravity(Gravity.CENTER);
   // Center round console-style controls beneath the dial, consistently in every journey state.
-  FrameLayout.LayoutParams frame=new FrameLayout.LayoutParams(-1,px(100),Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL);
-  frame.bottomMargin=px(32);dial.addView(actions,frame);
+  FrameLayout.LayoutParams frame=new FrameLayout.LayoutParams(-1,px(58),Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL);
+  frame.bottomMargin=px(37);frame.leftMargin=px(27);frame.rightMargin=px(27);
+  dial.addView(actions,frame);
   if(!TrackingService.active){
    LinearLayout start=roundJourneyControl(R.drawable.ic_drive_start,"START",0xff00a898);
    actions.addView(start,new LinearLayout.LayoutParams(px(94),px(94)));
@@ -161,10 +184,10 @@ public class ModernActivity extends MainActivity {
     requestPermissions(new String[]{android.Manifest.permission.ACCESS_FINE_LOCATION,android.Manifest.permission.ACCESS_COARSE_LOCATION},42);
     else startJourney();});
   }else{
-   LinearLayout pause=roundJourneyControl(TrackingService.paused?R.drawable.ic_drive_resume:R.drawable.ic_drive_pause,TrackingService.paused?"RESUME":"PAUSE",0xff029d9e);
-   LinearLayout stop=roundJourneyControl(R.drawable.ic_drive_stop,"STOP",0xff087c89);
-   LinearLayout.LayoutParams left=new LinearLayout.LayoutParams(px(94),px(94));left.rightMargin=px(14);
-   actions.addView(pause,left);actions.addView(stop,new LinearLayout.LayoutParams(px(94),px(94)));
+   LinearLayout pause=journeyPill(TrackingService.paused?R.drawable.ic_drive_resume:R.drawable.ic_drive_pause,TrackingService.paused?"RESUME":"PAUSE",0xff087e79);
+   LinearLayout stop=journeyPill(R.drawable.ic_drive_stop,"STOP",0xff263e49);
+   LinearLayout.LayoutParams left=new LinearLayout.LayoutParams(0,px(54),1);left.rightMargin=px(9);
+   actions.addView(pause,left);actions.addView(stop,new LinearLayout.LayoutParams(0,px(54),1));
    pause.setOnClickListener(v->{startService(new Intent(this,TrackingService.class).setAction(TrackingService.paused?"RESUME":"PAUSE"));handler.postDelayed(()->showDashboard(),200);});
    stop.setOnClickListener(v->new AlertDialog.Builder(this).setTitle("Save this journey?")
     .setMessage("The trip will be saved to History and the dashboard will reset.")
@@ -223,9 +246,9 @@ public class ModernActivity extends MainActivity {
     +"<link rel='stylesheet' href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'>"
     +"<style>html,body,#m{height:100%;width:100%;margin:0;background:#303942}.leaflet-container{background:#303942!important}"
     +".leaflet-tile-pane{filter:grayscale(1) invert(1) sepia(.2) hue-rotate(148deg) saturate(.75) brightness(.82) contrast(.92)}"
-    +".leaflet-control-attribution{font-size:8px;background:#303942cc!important;color:#d2dee2!important}</style></head>"
+    +".leaflet-control-attribution{font-size:9px;background:#303942dd!important;color:#d2dee2!important;padding:1px 4px!important}.leaflet-control-attribution a{color:#c0d8df!important}</style></head>"
     +"<body><div id='m'></div><script src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'></script>"
-    +"<script>try{var m=L.map('m',{zoomControl:false,dragging:false,touchZoom:false,scrollWheelZoom:false});"
+    +"<script>try{var m=L.map('m',{zoomControl:false,dragging:false,touchZoom:false,scrollWheelZoom:false,attributionControl:true});m.attributionControl.setPrefix(false);"
     +"L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'&copy; OpenStreetMap contributors'}).addTo(m);"
     +"var route=L.polyline([],{color:'#09ded0',weight:5,opacity:1}).addTo(m);"
     +"var dot=L.circleMarker([53.03,-7.3],{radius:7,color:'#ffffff',weight:2,fillColor:'#09ded0',fillOpacity:1});"
