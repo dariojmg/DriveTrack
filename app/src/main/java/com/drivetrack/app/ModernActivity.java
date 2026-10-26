@@ -18,6 +18,65 @@ public class ModernActivity extends MainActivity {
  long selectedId=-1;int exportType=0;int monthOffset=0;String searchTerm="";boolean hud=false;
  static final int DETAIL_EXPORT=880;
  LinearLayout panelRoot; TextView digitalSpeed;boolean keepAwake=true; android.webkit.WebView liveMap; TextView mapPending;
+ // A low-frequency display-only reverse geocode. No journey data or GPS filtering changes.
+ volatile boolean placeLookupBusy=false;
+ long lastPlaceLookupAt=0;
+ double lookupLat=Double.NaN,lookupLon=Double.NaN;
+ String nearbyPlace="";
+ double resolvedLat=Double.NaN,resolvedLon=Double.NaN;
+ void updatePlaceName(){
+  if(!TrackingService.active||TrackingService.lastFixTime<=0||TrackingService.points==null||
+     TrackingService.points.length()==0)return;
+  if(!getPreferences(0).getBoolean("showPlaceNames",true))return;
+  if(placeLookupBusy)return;
+  try{
+   JSONArray pair=TrackingService.points.getJSONArray(TrackingService.points.length()-1);
+   double lat=pair.getDouble(0),lon=pair.getDouble(1),metres=Double.NaN;
+   if(!Double.isNaN(lookupLat)){
+    float[] d=new float[1];android.location.Location.distanceBetween(lat,lon,lookupLat,lookupLon,d);metres=d[0];
+   }
+   long now=System.currentTimeMillis();
+   if(now-lastPlaceLookupAt<70000 && (Double.isNaN(metres)||metres<400))return;
+   if(!android.location.Geocoder.isPresent())return;
+   lookupLat=lat;lookupLon=lon;lastPlaceLookupAt=now;placeLookupBusy=true;
+   new Thread(()->{
+    String label=null;
+    try{
+     android.location.Geocoder geocoder=new android.location.Geocoder(getApplicationContext(),Locale.getDefault());
+     java.util.List<android.location.Address> addresses=geocoder.getFromLocation(lat,lon,1);
+     if(addresses!=null&&!addresses.isEmpty()){
+      android.location.Address address=addresses.get(0);
+      String street=address.getThoroughfare();
+      String town=address.getLocality();
+      if(town==null||town.isEmpty())town=address.getSubAdminArea();
+      if(town==null||town.isEmpty())town=address.getSubLocality();
+      if(street!=null&&!street.isEmpty()&&town!=null&&!town.isEmpty()&&!street.equalsIgnoreCase(town))
+       label=street+", "+town;
+      else if(town!=null&&!town.isEmpty())label=town;
+      else if(street!=null&&!street.isEmpty())label=street;
+     }
+    }catch(Exception ignored){}
+    final String name=label;
+    runOnUiThread(()->{
+     if(name!=null&&!name.isEmpty()){nearbyPlace=name;resolvedLat=lat;resolvedLon=lon;}
+     placeLookupBusy=false;
+     if(screen==0&&currentLocationValue!=null)updatePlaceDisplay();
+    });
+   },"DriveTrack-place-name").start();
+  }catch(Exception ignored){}
+ }
+ void updatePlaceDisplay(){
+  if(currentLocationValue==null)return;
+  String coordinates=TrackingService.active?TrackingService.locationText:"Waiting for GPS";
+  if(!getPreferences(0).getBoolean("showPlaceNames",true)||nearbyPlace.isEmpty()||
+     TrackingService.lastFixTime<=0){currentLocationValue.setText(coordinates);return;}
+  try{
+   JSONArray pair=TrackingService.points.getJSONArray(TrackingService.points.length()-1);
+   float[] metres=new float[1];
+   android.location.Location.distanceBetween(pair.getDouble(0),pair.getDouble(1),resolvedLat,resolvedLon,metres);
+   currentLocationValue.setText(metres[0]<=650?nearbyPlace:coordinates);
+  }catch(Exception ex){currentLocationValue.setText(coordinates);}
+ }
  int px(int v){return (int)(v*getResources().getDisplayMetrics().density+.5f);}
  boolean motionEnabled(){return android.animation.ValueAnimator.areAnimatorsEnabled();}
  class DialScrim extends View {
@@ -28,7 +87,7 @@ public class ModernActivity extends MainActivity {
    float radius=Math.min(w*.45f,h*.37f);
    if(radius<=0)return;
    paint.setShader(new RadialGradient(w/2f,h*.36f,radius,
-      new int[]{0xe8081827,0xc8081827,0x9a081827,0x00081827},
+      new int[]{0xc4081827,0xa2081827,0x7a081827,0x00081827},
       new float[]{0f,.49f,.72f,1f},Shader.TileMode.CLAMP));
    canvas.drawCircle(w/2f,h*.36f,radius,paint);
    paint.setShader(null);
@@ -175,7 +234,7 @@ public class ModernActivity extends MainActivity {
   LinearLayout actions=new LinearLayout(this);actions.setGravity(Gravity.CENTER);
   // Center round console-style controls beneath the dial, consistently in every journey state.
   FrameLayout.LayoutParams frame=new FrameLayout.LayoutParams(-1,px(58),Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL);
-  frame.bottomMargin=px(37);frame.leftMargin=px(27);frame.rightMargin=px(27);
+  frame.bottomMargin=px(37);frame.leftMargin=px(44);frame.rightMargin=px(44);
   dial.addView(actions,frame);
   if(!TrackingService.active){
    LinearLayout start=roundJourneyControl(R.drawable.ic_drive_start,"START",0xff00a898);
@@ -361,7 +420,7 @@ public class ModernActivity extends MainActivity {
    if(gpsValue!=null)gpsValue.setText(TrackingService.active&&!TrackingService.gpsIssue.isEmpty()?TrackingService.gpsIssue:!TrackingService.active?"○ Waiting for GPS":TrackingService.paused?"Ⅱ Paused":TrackingService.lastFixTime>0&&System.currentTimeMillis()-TrackingService.lastFixTime>8000?"○ Signal lost":TrackingService.accuracy<=10&&TrackingService.lastFixTime>0?"● Strong · ±"+(int)TrackingService.accuracy+" m":TrackingService.accuracy<=25&&TrackingService.lastFixTime>0?"● Fair · ±"+(int)TrackingService.accuracy+" m":TrackingService.lastFixTime>0?"○ Poor · ±"+(int)TrackingService.accuracy+" m":"○ Acquiring GPS");
    if(distanceValue!=null)distanceValue.setText(dist(TrackingService.distance));
    if(driveTimeValue!=null)driveTimeValue.setText(TrackingService.active?duration(TrackingService.elapsedActiveMs()):"00:00");
-   if(currentLocationValue!=null)currentLocationValue.setText(TrackingService.active?TrackingService.locationText:"Waiting for GPS");
+   if(currentLocationValue!=null){updatePlaceDisplay();updatePlaceName();}
    if(gauge!=null)gauge.invalidate();
    if(mapPending!=null){
     boolean fix=TrackingService.lastFixTime>0&&System.currentTimeMillis()-TrackingService.lastFixTime<12000;
@@ -662,6 +721,9 @@ public class ModernActivity extends MainActivity {
   switchRow(body,"Keep screen awake","Keep display visible during active recording","keepAwake",true,()->{keepAwake=getPreferences(0).getBoolean("keepAwake",true);updateScreenAwake();});
   switchRow(body,"Live mini map","Show your location beneath the speedometer","showLiveMap",true,()->{});
   sectionLabel(body,"DISPLAY");
+  switchRow(body,"Show nearby place name","Display a street or town when available; GPS coordinates otherwise","showPlaceNames",true,()->{
+   if(!getPreferences(0).getBoolean("showPlaceNames",true)){nearbyPlace="";lastPlaceLookupAt=0;}
+  });
   Button display=button("Minimal speedometer / HUD   ›",surface);block(body,display,px(52),10);
   display.setOnClickListener(v->{getPreferences(0).edit().putBoolean("hud",true).apply();showDashboard();});
   sectionLabel(body,"DATA & BACKUP");
