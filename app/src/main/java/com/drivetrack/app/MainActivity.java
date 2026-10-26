@@ -231,12 +231,19 @@ public class MainActivity extends Activity {
  }
  class Gauge extends View{
   final Paint p=new Paint(3);
+  float animatedSpeed=Float.NaN;
   Gauge(Context ctx){super(ctx);setLayerType(View.LAYER_TYPE_SOFTWARE,null);}
   @Override protected void onDraw(Canvas c){
    super.onDraw(c);
    float w=getWidth(),h=getHeight(),cx=w/2f,cy=h*.34f;
    float r=Math.min(w*.425f,h*.335f);
-   float speed=(float)(TrackingService.currentSpeed*(miles?2.236936:3.6)),maximum=miles?120:160;
+   float target=(float)(TrackingService.currentSpeed*(miles?2.236936:3.6));
+   if(Float.isNaN(animatedSpeed)||!android.animation.ValueAnimator.areAnimatorsEnabled())animatedSpeed=target;
+   else if(Math.abs(target-animatedSpeed)>.2f){
+    animatedSpeed+=(target-animatedSpeed)*.34f;
+    postInvalidateDelayed(16);
+   }else animatedSpeed=target;
+   float speed=animatedSpeed,maximum=miles?120:160;
    float fraction=Math.min(1,Math.max(0,speed/maximum));
    p.setStyle(Paint.Style.STROKE);p.setStrokeCap(Paint.Cap.ROUND);
    p.setStrokeWidth(dp(12));p.setColor(0xff233a4b);
