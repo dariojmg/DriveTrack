@@ -201,11 +201,17 @@ public class ModernActivity extends MainActivity {
     +"L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'&copy; OpenStreetMap contributors'}).addTo(m);"
     +"var route=L.polyline([],{color:'#09ded0',weight:5,opacity:1}).addTo(m);"
     +"var dot=L.circleMarker([53.03,-7.3],{radius:7,color:'#ffffff',weight:2,fillColor:'#09ded0',fillOpacity:1});"
-    +"window.showRoute=function(points){if(!Array.isArray(points)||!points.length)return;"
+    +"var shown=null,hasCentred=false;"
+    +"window.showRoute=function(points,speed){if(!Array.isArray(points)||!points.length)return;"
     +"var clean=points.filter(p=>Array.isArray(p)&&p.length>=2&&Number.isFinite(p[0])&&Number.isFinite(p[1]));"
-    +"if(!clean.length)return;route.setLatLngs(clean);var p=clean[clean.length-1];dot.setLatLng(p);"
-    +"if(!m.hasLayer(dot))dot.addTo(m);m.setView(p,15,{animate:false});m.invalidateSize();};"
-    +"window.moveTo=function(lat,lon){if(Number.isFinite(lat)&&Number.isFinite(lon))window.showRoute([[lat,lon]]);};"
+    +"if(!clean.length)return;route.setLatLngs(clean);var latest=L.latLng(clean[clean.length-1]);"
+    +"if(!shown||!(Number.isFinite(speed)&&speed<1.2&&shown.distanceTo(latest)<8))shown=latest;"
+    +"dot.setLatLng(shown);if(!m.hasLayer(dot))dot.addTo(m);m.invalidateSize();"
+    +"var z=15;var offset=m.getSize().y*0.16;"
+    +"var centre=m.unproject(m.project(shown,z).subtract(L.point(0,offset)),z);"
+    +"if(!hasCentred){m.setView(centre,z,{animate:false});hasCentred=true;}"
+    +"else{m.panTo(centre,{animate:true,duration:0.55,easeLinearity:0.5});}};"
+    +"window.moveTo=function(lat,lon){if(Number.isFinite(lat)&&Number.isFinite(lon))window.showRoute([[lat,lon]],0);};"
     +"m.setView([53.03,-7.3],13);setTimeout(function(){m.invalidateSize();},250);"
     +"}catch(err){document.getElementById('m').textContent='Map unavailable; journey recording continues';}"
     +"</script></body></html>";
@@ -323,7 +329,7 @@ public class ModernActivity extends MainActivity {
    JSONArray latest=pts.getJSONArray(pts.length()-1);
    double lat=latest.getDouble(0),lon=latest.getDouble(1);
    if(Math.abs(lat)>90||Math.abs(lon)>180)return;
-   liveMap.evaluateJavascript("if(window.showRoute)window.showRoute("+pts.toString()+");",null);
+   liveMap.evaluateJavascript("if(window.showRoute)window.showRoute("+pts.toString()+","+TrackingService.currentSpeed+");",null);
   }catch(Exception ignored){}
  }
  void openLiveMap(){
