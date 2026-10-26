@@ -19,6 +19,22 @@ public class ModernActivity extends MainActivity {
  static final int DETAIL_EXPORT=880;
  LinearLayout panelRoot; TextView digitalSpeed;boolean keepAwake=true; android.webkit.WebView liveMap; TextView mapPending;
  int px(int v){return (int)(v*getResources().getDisplayMetrics().density+.5f);}
+ boolean motionEnabled(){return android.animation.ValueAnimator.areAnimatorsEnabled();}
+ class DialScrim extends View {
+  final Paint paint=new Paint(3);
+  DialScrim(Context c){super(c);setClickable(false);setFocusable(false);}
+  @Override protected void onDraw(Canvas canvas){
+   float w=getWidth(),h=getHeight();
+   float radius=Math.min(w*.47f,h*.39f);
+   if(radius<=0)return;
+   paint.setShader(new RadialGradient(w/2f,h*.34f,radius,
+      new int[]{0xe8081827,0xc8081827,0x9a081827,0x00081827},
+      new float[]{0f,.49f,.72f,1f},Shader.TileMode.CLAMP));
+   canvas.drawCircle(w/2f,h*.34f,radius,paint);
+   paint.setShader(null);
+  }
+ }
+
  GradientDrawable round(int color,int radius){GradientDrawable g=new GradientDrawable();g.setColor(color);g.setCornerRadius(px(radius));return g;}
  TextView label(String t,int sp,int col){TextView v=new TextView(this);v.setText(t);v.setTextSize(sp);v.setTextColor(col);v.setFontFeatureSettings("tnum");return v;}
  LinearLayout.LayoutParams margin(int height,int bottom){LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,height<0?height:height);p.bottomMargin=px(bottom);return p;}
@@ -97,9 +113,10 @@ public class ModernActivity extends MainActivity {
   control.setOnTouchListener((v,event)->{
    int action=event.getActionMasked();
    if(action==MotionEvent.ACTION_DOWN){
-    v.animate().scaleX(.91f).scaleY(.91f).translationZ(-px(2)).setDuration(105).start();
+    if(motionEnabled())v.animate().scaleX(.94f).scaleY(.94f).translationZ(-px(1)).setDuration(95).start();
    }else if(action==MotionEvent.ACTION_UP||action==MotionEvent.ACTION_CANCEL){
-    v.animate().scaleX(1f).scaleY(1f).translationZ(0).setDuration(140).start();
+    if(motionEnabled())v.animate().scaleX(1f).scaleY(1f).translationZ(0).setDuration(155).start();
+    if(action==MotionEvent.ACTION_UP)v.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP);
    }
    return false;
   });
@@ -119,7 +136,7 @@ public class ModernActivity extends MainActivity {
   hud=getPreferences(0).getBoolean("hud",false);
   if(hud){showHud();return;}
   init("Dashboard");
-  if(TrackingService.active){body.setAlpha(0f);body.animate().alpha(1f).setDuration(420).start();}
+  if(TrackingService.active&&motionEnabled()){body.setAlpha(0f);body.animate().alpha(1f).setDuration(330).start();}
   if(!TrackingService.active){
    showReadyDashboard();
    return;
@@ -132,7 +149,7 @@ public class ModernActivity extends MainActivity {
   FrameLayout dial=new FrameLayout(this);
   dial.setBackground(round(0xff081827,22));dial.setClipToOutline(true);
   gauge=new Gauge(this);dial.addView(gauge,new FrameLayout.LayoutParams(-1,-1));
-  gauge.setAlpha(0f);gauge.post(()->gauge.animate().alpha(1f).setDuration(360).start());
+  if(motionEnabled()){gauge.setAlpha(0f);gauge.post(()->gauge.animate().alpha(1f).setDuration(275).start());}
   LinearLayout actions=new LinearLayout(this);actions.setGravity(Gravity.CENTER);
   // Center round console-style controls beneath the dial, consistently in every journey state.
   FrameLayout.LayoutParams frame=new FrameLayout.LayoutParams(-1,px(100),Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL);
@@ -166,7 +183,7 @@ public class ModernActivity extends MainActivity {
    // A vertical shade keeps the speed numerals readable over moving streets.
    View shade=new View(this);
    GradientDrawable overlayShade=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-     new int[]{0xd5081827,0x72081827,0x18081827,0x00081827});
+     new int[]{0x91081827,0x48081827,0x10081827,0x00081827});
    shade.setBackground(overlayShade);
    mini.addView(shade,new FrameLayout.LayoutParams(-1,-1));
    View overlay=new View(this);overlay.setClickable(true);overlay.setContentDescription("Open live map");
@@ -180,12 +197,23 @@ public class ModernActivity extends MainActivity {
    // Slide the live map into the lower cockpit, underneath the gauge and controls.
    FrameLayout.LayoutParams mapLayout=new FrameLayout.LayoutParams(-1,-1);
    dial.addView(mini,0,mapLayout);
-   mini.setAlpha(0f);
-   mini.post(()->{
-    mini.setTranslationY(px(130));
-    mini.animate().translationY(0).alpha(1f).setDuration(580)
-      .setInterpolator(new android.view.animation.DecelerateInterpolator()).start();
-   });
+   // Put the soft circular scrim above the map but below speed labels/ticks.
+   // It gently masks the route under the instrument instead of cutting the line off sharply.
+   dial.addView(new DialScrim(this),1,new FrameLayout.LayoutParams(-1,-1));
+   if(TrackingService.paused){
+    TextView pauseState=label("Ⅱ  PAUSED",12,0xffd5f6f1);
+    pauseState.setPadding(px(12),px(7),px(12),px(7));
+    pauseState.setBackground(round(0xe0264651,14));
+    FrameLayout.LayoutParams statePos=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.RIGHT);
+    statePos.topMargin=px(12);statePos.rightMargin=px(12);
+    dial.addView(pauseState,statePos);
+   }
+
+   if(motionEnabled()){
+    mini.setAlpha(0f);mini.setTranslationY(px(75));
+    mini.post(()->mini.animate().translationY(0).alpha(1f).setDuration(420)
+      .setInterpolator(new android.view.animation.DecelerateInterpolator()).start());
+   }
    TextView pending=label("Searching for GPS satellites · Move outdoors for a stronger signal",12,0xffaec6d4);mapPending=pending;
    pending.setGravity(Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL);pending.setPadding(px(18),0,px(18),px(145));
    mini.addView(pending,new FrameLayout.LayoutParams(-1,-1));
