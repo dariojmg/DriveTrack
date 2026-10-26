@@ -235,8 +235,8 @@ public class MainActivity extends Activity {
   Gauge(Context ctx){super(ctx);setLayerType(View.LAYER_TYPE_SOFTWARE,null);}
   @Override protected void onDraw(Canvas c){
    super.onDraw(c);
-   float w=getWidth(),h=getHeight(),cx=w/2f,cy=h*.34f;
-   float r=Math.min(w*.425f,h*.335f);
+   float w=getWidth(),h=getHeight(),cx=w/2f,cy=h*.36f;
+   float r=Math.min(w*.391f,h*.308f);
    float target=(float)(TrackingService.currentSpeed*(miles?2.236936:3.6));
    if(Float.isNaN(animatedSpeed)||!android.animation.ValueAnimator.areAnimatorsEnabled())animatedSpeed=target;
    else if(Math.abs(target-animatedSpeed)>.2f){
