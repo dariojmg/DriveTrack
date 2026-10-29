@@ -17,7 +17,7 @@ public class ModernActivity extends MainActivity {
  final int ink=0xff07111c, surface=0xff122534, accent=0xff09ded0,muted=0xff9cb6c8;
  long selectedId=-1;int exportType=0;int monthOffset=0;String searchTerm="";boolean hud=false;
  static final int DETAIL_EXPORT=880;
- LinearLayout panelRoot; TextView digitalSpeed;boolean keepAwake=true; android.webkit.WebView liveMap; TextView mapPending;
+ LinearLayout panelRoot; TextView digitalSpeed;boolean keepAwake=true; android.webkit.WebView liveMap; TextView mapPending; TextView mapModeSpeed;
  // A low-frequency display-only reverse geocode. No journey data or GPS filtering changes.
  volatile boolean placeLookupBusy=false;
  long lastPlaceLookupAt=0;
@@ -228,7 +228,7 @@ public class ModernActivity extends MainActivity {
  int lightenButton(int color){return Color.rgb(Math.min(255,Color.red(color)+34),Math.min(255,Color.green(color)+34),Math.min(255,Color.blue(color)+34));}
  int darkenButton(int color){return Color.rgb((int)(Color.red(color)*.74),(int)(Color.green(color)*.74),(int)(Color.blue(color)*.74));}
  @Override void showDashboard(){
-  screen=0;
+  screen=0;mapModeSpeed=null;
   hud=getPreferences(0).getBoolean("hud",false);
   if(hud){showHud();return;}
   init("Dashboard");
@@ -302,7 +302,7 @@ public class ModernActivity extends MainActivity {
    // Put the soft circular scrim above the map but below speed labels/ticks.
    // It gently masks the route under the instrument instead of cutting the line off sharply.
    if(!routeFirst)dial.addView(new DialScrim(this),1,new FrameLayout.LayoutParams(-1,-1));
-   else {TextView liveSpeed=label("SPEED  "+Math.round(TrackingService.currentSpeed*(miles?2.236936:3.6))+(miles?" mph":" km/h"),20,Color.WHITE);liveSpeed.setTypeface(null,1);liveSpeed.setPadding(px(15),px(10),px(15),px(10));liveSpeed.setBackground(round(0xd3102836,15));FrameLayout.LayoutParams pos=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.CENTER_HORIZONTAL);pos.topMargin=px(19);dial.addView(liveSpeed,pos);}
+   else {TextView liveSpeed=label("SPEED  "+Math.round(TrackingService.currentSpeed*(miles?2.236936:3.6))+(miles?" mph":" km/h"),20,Color.WHITE);liveSpeed.setTypeface(null,1);liveSpeed.setPadding(px(15),px(10),px(15),px(10));liveSpeed.setBackground(round(0xd3102836,15));FrameLayout.LayoutParams pos=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.CENTER_HORIZONTAL);pos.topMargin=px(19);dial.addView(liveSpeed,pos);mapModeSpeed=liveSpeed;}
    if(TrackingService.paused){
     TextView pauseState=label("Ⅱ  PAUSED",12,0xffd5f6f1);
     pauseState.setPadding(px(12),px(7),px(12),px(7));
@@ -443,6 +443,7 @@ public class ModernActivity extends MainActivity {
    if(driveTimeValue!=null)driveTimeValue.setText(TrackingService.active?duration(TrackingService.elapsedActiveMs()):"00:00");
    if(currentLocationValue!=null){updatePlaceDisplay();updatePlaceName();}
    if(gauge!=null)gauge.invalidate();
+   if(mapModeSpeed!=null)mapModeSpeed.setText("SPEED  "+Math.round(TrackingService.currentSpeed*(miles?2.236936:3.6))+(miles?" mph":" km/h"));
    if(mapPending!=null){
     boolean fix=TrackingService.lastFixTime>0&&System.currentTimeMillis()-TrackingService.lastFixTime<12000;
     mapPending.setVisibility(fix?View.GONE:View.VISIBLE);
@@ -750,14 +751,16 @@ public class ModernActivity extends MainActivity {
    +"var dot=L.circleMarker(ll[0],{radius:8,color:'#ffffff',weight:2,fillColor:'#09ded0',fillOpacity:1}).addTo(m);"
    +"m.fitBounds(full.getBounds(),{padding:[24,24],maxZoom:16});"
    +"window.replayAt=function(f){var n=Math.max(0,Math.min(ll.length-1,Math.floor(f*(ll.length-1))));"
+   +"if(pts[0].length>=3){var start=pts[0][2],end=pts[pts.length-1][2],target=start+f*(end-start);n=0;while(n+1<pts.length&&pts[n+1][2]<=target)n++;}"
    +"done.setLatLngs(ll.slice(0,n+1));dot.setLatLng(ll[n]);};window.replayAt(0);"
    +"</script></body></html>";
   replayMap.loadDataWithBaseURL("https://appassets.androidplatform.net/",html,"text/html","UTF-8",null);
   TextView progress=label("0% of route",13,accent);block(body,progress,-2,6);
   SeekBar seek=new SeekBar(this);seek.setMax(1000);block(body,seek,px(44),6);
-  final boolean[] playing={false};final int[] stepMs={65};final long[] replayLast={0};
+  final boolean[] playing={false};final int[] speedFactor={1};
+  final long replayDuration=timed?Math.max(1000,track.optJSONArray(track.length()-1).optLong(2)-track.optJSONArray(0).optLong(2)):Math.max(1000,(track.length()-1)*1000L);
   seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
-   public void onStartTrackingTouch(SeekBar b){playing[0]=false;}
+   public void onStartTrackingTouch(SeekBar b){playing[0]=false;play.setText("▶ Play");}
    public void onStopTrackingTouch(SeekBar b){}
    public void onProgressChanged(SeekBar b,int value,boolean user){
     replayMap.evaluateJavascript("if(window.replayAt)window.replayAt("+(value/1000.0)+");",null);
@@ -770,11 +773,11 @@ public class ModernActivity extends MainActivity {
   buttons.addView(play,lp);buttons.addView(speedButton,new LinearLayout.LayoutParams(0,px(53),1));
   block(body,buttons,px(53),8);
   play.setOnClickListener(v->{playing[0]=!playing[0];play.setText(playing[0]?"Ⅱ Pause":"▶ Play");});
-  speedButton.setOnClickListener(v->{int[] speeds={65,32,16};String[] names={"1× speed","2× speed","4× speed"};int next=stepMs[0]==65?1:stepMs[0]==32?2:0;stepMs[0]=speeds[next];speedButton.setText(names[next]);});
+  speedButton.setOnClickListener(v->{speedFactor[0]=speedFactor[0]==1?2:speedFactor[0]==2?4:1;speedButton.setText(speedFactor[0]+"× speed");});
   handler.postDelayed(new Runnable(){public void run(){
    if(screen!=6)return;
    if(playing[0]){
-    int next=seek.getProgress()+Math.max(1,(int)Math.ceil(1000d/Math.max(2,track.length())*(65d/stepMs[0])));
+    int next=seek.getProgress()+Math.max(1,(int)Math.ceil(1000d*65*speedFactor[0]/replayDuration));
     if(next>=1000){seek.setProgress(1000);playing[0]=false;play.setText("▶ Replay");}
     else seek.setProgress(next);
    }
