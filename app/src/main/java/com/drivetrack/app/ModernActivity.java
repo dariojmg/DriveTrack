@@ -241,11 +241,25 @@ public class ModernActivity extends MainActivity {
   signal.setBackground(round(surface,16));
   signal.addView(label("◉   GPS STATUS",11,muted),new LinearLayout.LayoutParams(0,-2,1));
   gpsValue=label("Acquiring signal",12,accent);signal.addView(gpsValue);
-  TextView mode=label(getPreferences(0).getBoolean("routeFirst",false)?"MAP  ◉":"GAUGE  ◉",11,accent);
-  mode.setGravity(Gravity.CENTER);mode.setPadding(px(8),0,px(8),0);mode.setBackground(round(0xff193c47,12));
-  signal.addView(mode,new LinearLayout.LayoutParams(px(92),px(35)));
-  mode.setOnClickListener(v->{boolean next=!getPreferences(0).getBoolean("routeFirst",false);getPreferences(0).edit().putBoolean("routeFirst",next).apply();showDashboard();});
-  block(body,signal,px(40),9);
+  block(body,signal,px(40),5);
+  // Two explicit view choices, separate from GPS status.
+  LinearLayout switcher=new LinearLayout(this);switcher.setGravity(Gravity.CENTER);
+  switcher.setPadding(px(3),px(3),px(3),px(3));switcher.setBackground(round(0xff172c3a,14));
+  boolean mapSelected=getPreferences(0).getBoolean("routeFirst",false);
+  for(int i=0;i<2;i++){
+   final boolean selectMap=i==1;
+   TextView choice=label(i==0?"◉  SPEEDOMETER":"▰  MAP + GAUGE",12,mapSelected==selectMap?0xff061c27:muted);
+   choice.setTypeface(null,mapSelected==selectMap?1:0);choice.setGravity(Gravity.CENTER);
+   choice.setBackground(round(mapSelected==selectMap?0xff24cbbd:0xff172c3a,11));
+   LinearLayout.LayoutParams opt=new LinearLayout.LayoutParams(0,px(34),1);
+   if(i==0)opt.rightMargin=px(3);switcher.addView(choice,opt);
+   choice.setClickable(true);choice.setFocusable(true);
+   choice.setContentDescription((selectMap?"Map and gauge":"Speedometer")+" view");
+   choice.setOnClickListener(v->{if(mapSelected==selectMap)return;
+    v.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP);
+    getPreferences(0).edit().putBoolean("routeFirst",selectMap).apply();showDashboard();});
+  }
+  block(body,switcher,px(40),7);
   FrameLayout dial=new FrameLayout(this);
   dial.setBackground(round(0xff081827,22));dial.setClipToOutline(true);
   boolean routeFirst=getPreferences(0).getBoolean("routeFirst",false);
@@ -302,7 +316,19 @@ public class ModernActivity extends MainActivity {
    // Put the soft circular scrim above the map but below speed labels/ticks.
    // It gently masks the route under the instrument instead of cutting the line off sharply.
    if(!routeFirst)dial.addView(new DialScrim(this),1,new FrameLayout.LayoutParams(-1,-1));
-   else {TextView liveSpeed=label("SPEED  "+Math.round(TrackingService.currentSpeed*(miles?2.236936:3.6))+(miles?" mph":" km/h"),20,Color.WHITE);liveSpeed.setTypeface(null,1);liveSpeed.setPadding(px(15),px(10),px(15),px(10));liveSpeed.setBackground(round(0xd3102836,15));FrameLayout.LayoutParams pos=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.CENTER_HORIZONTAL);pos.topMargin=px(19);dial.addView(liveSpeed,pos);mapModeSpeed=liveSpeed;}
+   else {
+    // The map view has a distinct flat digital instrument, not a second analogue speedometer.
+    LinearLayout instrument=vertical();instrument.setPadding(px(17),px(10),px(17),px(11));
+    instrument.setBackground(round(0xf0112838,19));instrument.setElevation(px(5));
+    TextView title=label("LIVE SPEED  ·  MAP VIEW",10,0xffa9c4d1);title.setLetterSpacing(.08f);
+    instrument.addView(title);
+    mapModeSpeed=label("0 km/h",33,0xffffffff);mapModeSpeed.setTypeface(null,1);
+    instrument.addView(mapModeSpeed);
+    TextView hint=label("GPS speed · route stays in view",11,0xff74ded5);
+    instrument.addView(hint);
+    FrameLayout.LayoutParams pos=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.LEFT);
+    pos.topMargin=px(18);pos.leftMargin=px(18);dial.addView(instrument,pos);
+   }
    if(TrackingService.paused){
     TextView pauseState=label("Ⅱ  PAUSED",12,0xffd5f6f1);
     pauseState.setPadding(px(12),px(7),px(12),px(7));
@@ -443,7 +469,7 @@ public class ModernActivity extends MainActivity {
    if(driveTimeValue!=null)driveTimeValue.setText(TrackingService.active?duration(TrackingService.elapsedActiveMs()):"00:00");
    if(currentLocationValue!=null){updatePlaceDisplay();updatePlaceName();}
    if(gauge!=null)gauge.invalidate();
-   if(mapModeSpeed!=null)mapModeSpeed.setText("SPEED  "+Math.round(TrackingService.currentSpeed*(miles?2.236936:3.6))+(miles?" mph":" km/h"));
+   if(mapModeSpeed!=null)mapModeSpeed.setText(Math.round(TrackingService.currentSpeed*(miles?2.236936:3.6))+(miles?" mph":" km/h"));
    if(mapPending!=null){
     boolean fix=TrackingService.lastFixTime>0&&System.currentTimeMillis()-TrackingService.lastFixTime<12000;
     mapPending.setVisibility(fix?View.GONE:View.VISIBLE);
@@ -671,6 +697,13 @@ public class ModernActivity extends MainActivity {
    try(TripStore store=new TripStore(this)){store.rename(id,name.getText().toString().trim(),memo.getText().toString().trim());}showDetail(id);
   }).show();
  }
+ String insightDuration(long ms){
+  long minutes=Math.max(0,ms/60000),days=minutes/1440,hours=minutes/60%24,mins=minutes%60;
+  if(days>0)return days+"d "+hours+"h "+mins+"m";
+  if(minutes>=60)return (minutes/60)+"h "+mins+"m";
+  if(minutes>0)return minutes+"m";
+  return Math.max(0,ms/1000)+"s";
+ }
  void showInsights(){
   screen=5;init("Insights");headerSmall(body,"Driving insights","Totals calculated from saved journeys");
   int count=0;double metres=0,longest=0,highest=0;long duration=0;
@@ -685,7 +718,7 @@ public class ModernActivity extends MainActivity {
    }
   }
   twoStats(body,"JOURNEYS",""+count,"TOTAL DISTANCE",dist(metres));
-  twoStats(body,"DRIVE TIME",duration(duration),"TOP SPEED",speed(highest));
+  twoStats(body,"DRIVE TIME",insightDuration(duration),"TOP SPEED",speed(highest));
   twoStats(body,"AVG JOURNEY",dist(count==0?0:metres/count),"LONGEST",dist(longest));
   headerSmall(body,"Speed insights","Speed samples from your recorded journeys");
   ArrayList<Float> collected=new ArrayList<>();float[] speedBuckets=new float[6];
@@ -706,14 +739,16 @@ public class ModernActivity extends MainActivity {
   if(samplesCount==0)block(body,label("No detailed speed samples in saved trips yet",13,muted),-2,12);
   else{
    twoStats(body,"SAMPLED AVG",String.format(Locale.getDefault(),"%.1f km/h",combined/samplesCount),"TRIPS WITH DATA",""+journeysWithSamples);
-   block(body,label("Speed over time · available samples",13,muted),-2,6);
+   block(body,label("Recorded speed sequence · "+samplesCount+" GPS samples",13,muted),-2,4);
+   block(body,label("Y: km/h   ·   X: sample order across journeys (not elapsed time)",11,muted),-2,6);
    float[] vals=new float[collected.size()];for(int i=0;i<vals.length;i++)vals[i]=collected.get(i);
    block(body,new SpeedChart(this,vals,false),px(164),14);
-   block(body,label("Speed distribution · 0–20 / 20–40 / 40–60 / 60–80 / 80–100 / 100+ km/h",12,muted),-2,7);
+   block(body,label("Speed distribution",15,0xfff4f8fb),-2,2);
+   block(body,label("Share of GPS readings in each speed range · % of samples",11,muted),-2,7);
    block(body,new SpeedChart(this,speedBuckets,true),px(152),16);
    block(body,label("Sampled averages depend on GPS availability, not vehicle odometer data.",12,muted),-2,14);
   }
-  headerSmall(body,"Distance by month","Your saved trip history");
+  headerSmall(body,"Distance by month","Distance recorded in each calendar month");
   if(months.isEmpty())block(body,label("No journeys recorded yet",14,muted),-2,5);
   double maxMonth=1;for(double v:months.values())maxMonth=Math.max(maxMonth,v);
   for(Map.Entry<String,Double> item:months.entrySet()){
@@ -785,20 +820,51 @@ public class ModernActivity extends MainActivity {
   }},65);
  }
  class SpeedChart extends View{
-  final float[] values; final Paint pen=new Paint(3);final boolean distribution;
-  SpeedChart(Context ctx,float[] v,boolean histogram){super(ctx);values=v;distribution=histogram;setBackground(round(0xff182c39,15));}
+  final float[] values;final Paint p=new Paint(3);final boolean distribution;
+  final int[] colors={0xff27c6b6,0xff48a4e0,0xffb48af4,0xffffbb6b,0xfff78e89,0xffdb699e};
+  SpeedChart(Context ctx,float[] data,boolean histogram){super(ctx);values=data;distribution=histogram;setBackground(round(0xff182c39,15));}
   @Override protected void onDraw(Canvas c){
-   super.onDraw(c);float w=getWidth(),h=getHeight(),pad=px(18);if(values.length==0)return;
-   float max=1;for(float v:values)max=Math.max(max,v);
-   pen.setStrokeWidth(px(1));pen.setColor(0xff385364);pen.setStyle(Paint.Style.STROKE);
-   for(int i=1;i<4;i++)c.drawLine(pad,h*i/4,w-pad,h*i/4,pen);
-   pen.setColor(accent);
-   if(distribution){float bw=(w-pad*2)/values.length;pen.setStyle(Paint.Style.FILL);
-    for(int i=0;i<values.length;i++){float bh=(h-2*pad)*values[i]/max;c.drawRoundRect(pad+bw*i+px(2),h-pad-bh,pad+bw*(i+1)-px(2),h-pad,px(3),px(3),pen);}
-   }else{Path path=new Path();for(int i=0;i<values.length;i++){
-     float x=pad+(w-2*pad)*i/Math.max(1,values.length-1),y=h-pad-(h-2*pad)*values[i]/max;
+   super.onDraw(c);if(values.length==0)return;
+   float w=getWidth(),h=getHeight(),left=px(distribution?14:43),right=w-px(13),top=px(17),bottom=h-px(distribution?44:28);
+   float max=1,total=0;for(float v:values){max=Math.max(max,v);total+=v;}
+   p.setTypeface(Typeface.create("sans-serif",Typeface.NORMAL));p.setTextSize(px(10));p.setTextAlign(Paint.Align.RIGHT);
+   for(int i=0;i<=3;i++){
+    float y=bottom-(bottom-top)*i/3f;
+    p.setColor(0xff40596b);p.setStrokeWidth(px(1));p.setStyle(Paint.Style.STROKE);c.drawLine(left,y,right,y,p);
+    if(!distribution){
+     p.setStyle(Paint.Style.FILL);p.setColor(0xff9db9ca);
+     c.drawText(Math.round(max*i/3f)+"",left-px(8),y+px(4),p);
+    }
+   }
+   if(distribution){
+    String[] bins={"0–20","20–40","40–60","60–80","80–100","100+"};
+    float bw=(right-left)/values.length;
+    for(int i=0;i<values.length;i++){
+     float x1=left+bw*i+px(2),x2=left+bw*(i+1)-px(2);
+     float bh=(bottom-top)*values[i]/max;
+     p.setStyle(Paint.Style.FILL);p.setColor(colors[i]);
+     c.drawRoundRect(x1,bottom-bh,x2,bottom,px(4),px(4),p);
+     p.setTextAlign(Paint.Align.CENTER);p.setTextSize(px(9));p.setColor(0xffe1f0f5);
+     c.drawText(total>0?Math.round(values[i]*100/total)+"%":"0%",(x1+x2)/2,bottom-bh-px(5),p);
+     p.setTextSize(px(9));p.setColor(0xffb7c8d2);
+     c.drawText(bins[i],(x1+x2)/2,bottom+px(16),p);
+    }
+    p.setTextSize(px(10));p.setColor(0xff9db9ca);p.setTextAlign(Paint.Align.CENTER);
+    c.drawText("Speed range (km/h)",w/2,h-px(9),p);
+   }else{
+    Path path=new Path();
+    for(int i=0;i<values.length;i++){
+     float x=left+(right-left)*i/Math.max(1,values.length-1);
+     float y=bottom-(bottom-top)*values[i]/max;
      if(i==0)path.moveTo(x,y);else path.lineTo(x,y);
-    }pen.setStyle(Paint.Style.STROKE);pen.setStrokeWidth(px(2));c.drawPath(path,pen);}
+    }
+    p.setColor(0xff25dfd1);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(px(2));p.setStrokeJoin(Paint.Join.ROUND);
+    c.drawPath(path,p);
+    p.setStyle(Paint.Style.FILL);p.setTextSize(px(10));p.setColor(0xff9db9ca);
+    p.setTextAlign(Paint.Align.LEFT);c.drawText("1",left,bottom+px(17),p);
+    p.setTextAlign(Paint.Align.RIGHT);c.drawText(""+values.length,right,bottom+px(17),p);
+    p.setTextAlign(Paint.Align.LEFT);c.drawText("km/h",px(5),px(12),p);
+   }
   }
  }
  class RouteThumbnail extends View {
