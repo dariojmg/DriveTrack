@@ -76,7 +76,7 @@ public class TrackingService extends Service implements LocationListener {
   }catch(Exception ignored){}
   last=p;lastAt=now;lastFixTime=System.currentTimeMillis();
   locationText=String.format(java.util.Locale.US,"%.5f, %.5f",p.getLatitude(),p.getLongitude());
-  try { JSONArray pair=new JSONArray();pair.put(p.getLatitude());pair.put(p.getLongitude());points.put(pair); } catch (JSONException ignored) {}
+  try { JSONArray pair=new JSONArray();pair.put(p.getLatitude());pair.put(p.getLongitude());pair.put(System.currentTimeMillis());points.put(pair); } catch (JSONException ignored) {}
   getSharedPreferences("recovery",0).edit().putLong("started",started).putFloat("distance",(float)distance).putFloat("max",(float)maxSpeed).putLong("moving",movingMs).putString("points",points.toString()).apply();
   sendBroadcast(new Intent(UPDATE).setPackage(getPackageName()));
  }
