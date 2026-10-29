@@ -13,8 +13,8 @@ android {
         applicationId 'com.drivetrack.app'
         minSdk 26
         targetSdk 35
-        versionCode 35
-        versionName '1.8.0-beta'
+        versionCode 36
+        versionName '2.1.0-beta'
     }
     signingConfigs {
         permanentRelease {
