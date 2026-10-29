@@ -160,7 +160,9 @@ public class ModernActivity extends MainActivity {
   if(title.equals("Dashboard")||title.equals("History")||title.equals("Insights")||title.equals("Settings"))root.addView(nav);
  }
  void goBackFrom(String title){
-  if(title.equals("Details")||title.equals("Insights"))showHistory();
+  if(title.equals("Replay"))showDetail(selectedId);
+  else if(title.equals("Details"))showHistory();
+  else if(title.equals("Insights"))showHistory();
   else if(title.equals("HUD")){getPreferences(0).edit().putBoolean("hud",false).apply();showDashboard();}
   else showDashboard();
  }
@@ -684,6 +686,32 @@ public class ModernActivity extends MainActivity {
   twoStats(body,"JOURNEYS",""+count,"TOTAL DISTANCE",dist(metres));
   twoStats(body,"DRIVE TIME",duration(duration),"TOP SPEED",speed(highest));
   twoStats(body,"AVG JOURNEY",dist(count==0?0:metres/count),"LONGEST",dist(longest));
+  headerSmall(body,"Speed insights","Speed samples from your recorded journeys");
+  ArrayList<Float> collected=new ArrayList<>();float[] speedBuckets=new float[6];
+  int journeysWithSamples=0;double combined=0;long samplesCount=0;
+  try(TripStore store=new TripStore(this);Cursor row=store.all()){
+   while(row.moveToNext()){
+    String raw=row.getString(row.getColumnIndexOrThrow("telemetry"));if(raw==null)continue;
+    JSONArray samples=new JSONArray(raw);if(samples.length()<2)continue;journeysWithSamples++;
+    for(int i=0;i<samples.length();i++){
+     JSONArray v=samples.optJSONArray(i);if(v==null||v.length()<3)continue;
+     double kmh=Math.max(0,v.optDouble(2,0)*3.6);
+     speedBuckets[Math.min(5,(int)(kmh/20))]++;
+     combined+=kmh;samplesCount++;
+     if(collected.size()<700)collected.add((float)kmh);
+    }
+   }
+  }catch(Exception ignored){}
+  if(samplesCount==0)block(body,label("No detailed speed samples in saved trips yet",13,muted),-2,12);
+  else{
+   twoStats(body,"SAMPLED AVG",String.format(Locale.getDefault(),"%.1f km/h",combined/samplesCount),"TRIPS WITH DATA",""+journeysWithSamples);
+   block(body,label("Speed over time · available samples",13,muted),-2,6);
+   float[] vals=new float[collected.size()];for(int i=0;i<vals.length;i++)vals[i]=collected.get(i);
+   block(body,new SpeedChart(this,vals,false),px(164),14);
+   block(body,label("Speed distribution · 0–20 / 20–40 / 40–60 / 60–80 / 80–100 / 100+ km/h",12,muted),-2,7);
+   block(body,new SpeedChart(this,speedBuckets,true),px(152),16);
+   block(body,label("Sampled averages depend on GPS availability, not vehicle odometer data.",12,muted),-2,14);
+  }
   headerSmall(body,"Distance by month","Your saved trip history");
   if(months.isEmpty())block(body,label("No journeys recorded yet",14,muted),-2,5);
   double maxMonth=1;for(double v:months.values())maxMonth=Math.max(maxMonth,v);
