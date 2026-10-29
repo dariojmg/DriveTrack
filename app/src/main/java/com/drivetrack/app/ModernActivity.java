@@ -760,7 +760,7 @@ public class ModernActivity extends MainActivity {
   final boolean[] playing={false};final int[] speedFactor={1};
   final long replayDuration=timed?Math.max(1000,track.optJSONArray(track.length()-1).optLong(2)-track.optJSONArray(0).optLong(2)):Math.max(1000,(track.length()-1)*1000L);
   seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
-   public void onStartTrackingTouch(SeekBar b){playing[0]=false;play.setText("▶ Play");}
+   public void onStartTrackingTouch(SeekBar b){playing[0]=false;}
    public void onStopTrackingTouch(SeekBar b){}
    public void onProgressChanged(SeekBar b,int value,boolean user){
     replayMap.evaluateJavascript("if(window.replayAt)window.replayAt("+(value/1000.0)+");",null);
