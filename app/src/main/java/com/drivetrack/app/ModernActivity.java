@@ -732,17 +732,29 @@ public class ModernActivity extends MainActivity {
      double kmh=Math.max(0,v.optDouble(2,0)*3.6);
      speedBuckets[Math.min(5,(int)(kmh/20))]++;
      combined+=kmh;samplesCount++;
-     if(collected.size()<700)collected.add((float)kmh);
+     collected.add((float)kmh);
     }
    }
   }catch(Exception ignored){}
   if(samplesCount==0)block(body,label("No detailed speed samples in saved trips yet",13,muted),-2,12);
   else{
    twoStats(body,"SAMPLED AVG",String.format(Locale.getDefault(),"%.1f km/h",combined/samplesCount),"TRIPS WITH DATA",""+journeysWithSamples);
-   block(body,label("Recorded speed sequence · "+samplesCount+" GPS samples",13,muted),-2,4);
-   block(body,label("Y: km/h   ·   X: sample order across journeys (not elapsed time)",11,muted),-2,6);
-   float[] vals=new float[collected.size()];for(int i=0;i<vals.length;i++)vals[i]=collected.get(i);
-   block(body,new SpeedChart(this,vals,false),px(164),14);
+   TextView trendTitle=label("Speed trend",18,0xfff4f8fb);trendTitle.setTypeface(null,1);block(body,trendTitle,-2,5);
+   TextView sampleChip=label(String.format(Locale.getDefault(),"%,d GPS samples",samplesCount),12,0xffc9f7ee);
+   sampleChip.setPadding(px(11),px(7),px(11),px(7));sampleChip.setBackground(round(0xff1d4850,12));
+   block(body,sampleChip,-2,9);
+   // Display aggregation covers ALL stored samples, not only the first 700.
+   // Equal-sized sequential buckets make the graph legible without changing stored telemetry.
+   int bins=Math.min(120,collected.size());
+   float[] vals=new float[bins];
+   for(int b=0;b<bins;b++){
+    int from=(int)((long)b*collected.size()/bins);
+    int to=(int)((long)(b+1)*collected.size()/bins);
+    double sum=0;for(int j=from;j<to;j++)sum+=collected.get(j);
+    vals[b]=(float)(sum/Math.max(1,to-from));
+   }
+   block(body,new SpeedChart(this,vals,false),px(216),7);
+   block(body,label("Average speed per sample group · sequence across journeys, not elapsed time",11,muted),-2,18);
    block(body,label("Speed distribution",15,0xfff4f8fb),-2,2);
    block(body,label("Share of GPS readings in each speed range · % of samples",11,muted),-2,7);
    block(body,new SpeedChart(this,speedBuckets,true),px(152),16);
@@ -825,15 +837,15 @@ public class ModernActivity extends MainActivity {
   SpeedChart(Context ctx,float[] data,boolean histogram){super(ctx);values=data;distribution=histogram;setBackground(round(0xff182c39,15));}
   @Override protected void onDraw(Canvas c){
    super.onDraw(c);if(values.length==0)return;
-   float w=getWidth(),h=getHeight(),left=px(distribution?14:43),right=w-px(13),top=px(17),bottom=h-px(distribution?44:28);
+   float w=getWidth(),h=getHeight(),left=px(distribution?14:49),right=w-px(16),top=px(distribution?17:29),bottom=h-px(distribution?44:36);
    float max=1,total=0;for(float v:values){max=Math.max(max,v);total+=v;}
-   p.setTypeface(Typeface.create("sans-serif",Typeface.NORMAL));p.setTextSize(px(10));p.setTextAlign(Paint.Align.RIGHT);
+   p.setTypeface(Typeface.create("sans-serif",Typeface.NORMAL));p.setTextSize(px(12));p.setTextAlign(Paint.Align.RIGHT);
    for(int i=0;i<=3;i++){
     float y=bottom-(bottom-top)*i/3f;
-    p.setColor(0xff40596b);p.setStrokeWidth(px(1));p.setStyle(Paint.Style.STROKE);c.drawLine(left,y,right,y,p);
+    p.setColor(0xff344b5b);p.setStrokeWidth(px(1));p.setStyle(Paint.Style.STROKE);c.drawLine(left,y,right,y,p);
     if(!distribution){
-     p.setStyle(Paint.Style.FILL);p.setColor(0xff9db9ca);
-     c.drawText(Math.round(max*i/3f)+"",left-px(8),y+px(4),p);
+     p.setStyle(Paint.Style.FILL);p.setColor(0xffaec6d4);p.setTextSize(px(12));
+     c.drawText(Math.round(max*i/3f)+"",left-px(11),y+px(4),p);
     }
    }
    if(distribution){
@@ -858,12 +870,13 @@ public class ModernActivity extends MainActivity {
      float y=bottom-(bottom-top)*values[i]/max;
      if(i==0)path.moveTo(x,y);else path.lineTo(x,y);
     }
-    p.setColor(0xff25dfd1);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(px(2));p.setStrokeJoin(Paint.Join.ROUND);
+    p.setColor(0xff25dfd1);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(px(3));p.setStrokeJoin(Paint.Join.ROUND);
     c.drawPath(path,p);
-    p.setStyle(Paint.Style.FILL);p.setTextSize(px(10));p.setColor(0xff9db9ca);
-    p.setTextAlign(Paint.Align.LEFT);c.drawText("1",left,bottom+px(17),p);
-    p.setTextAlign(Paint.Align.RIGHT);c.drawText(""+values.length,right,bottom+px(17),p);
-    p.setTextAlign(Paint.Align.LEFT);c.drawText("km/h",px(5),px(12),p);
+    p.setStyle(Paint.Style.FILL);p.setTextSize(px(12));p.setColor(0xffb4cad8);
+    p.setTextAlign(Paint.Align.LEFT);c.drawText("Start",left,bottom+px(23),p);
+    p.setTextAlign(Paint.Align.CENTER);c.drawText("Middle",(left+right)/2,bottom+px(23),p);
+    p.setTextAlign(Paint.Align.RIGHT);c.drawText("End",right,bottom+px(23),p);
+    p.setTextAlign(Paint.Align.LEFT);p.setTextSize(px(12));c.drawText("km/h",left,px(18),p);
    }
   }
  }
