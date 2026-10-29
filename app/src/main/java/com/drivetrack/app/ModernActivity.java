@@ -239,11 +239,16 @@ public class ModernActivity extends MainActivity {
   signal.setBackground(round(surface,16));
   signal.addView(label("◉   GPS STATUS",11,muted),new LinearLayout.LayoutParams(0,-2,1));
   gpsValue=label("Acquiring signal",12,accent);signal.addView(gpsValue);
+  TextView mode=label(getPreferences(0).getBoolean("routeFirst",false)?"MAP  ◉":"GAUGE  ◉",11,accent);
+  mode.setGravity(Gravity.CENTER);mode.setPadding(px(8),0,px(8),0);mode.setBackground(round(0xff193c47,12));
+  signal.addView(mode,new LinearLayout.LayoutParams(px(92),px(35)));
+  mode.setOnClickListener(v->{boolean next=!getPreferences(0).getBoolean("routeFirst",false);getPreferences(0).edit().putBoolean("routeFirst",next).apply();showDashboard();});
   block(body,signal,px(40),9);
   FrameLayout dial=new FrameLayout(this);
   dial.setBackground(round(0xff081827,22));dial.setClipToOutline(true);
-  gauge=new Gauge(this);dial.addView(gauge,new FrameLayout.LayoutParams(-1,-1));
-  if(motionEnabled()){gauge.setAlpha(0f);gauge.post(()->gauge.animate().alpha(1f).setDuration(275).start());}
+  boolean routeFirst=getPreferences(0).getBoolean("routeFirst",false);
+  gauge=routeFirst?null:new Gauge(this);if(gauge!=null)dial.addView(gauge,new FrameLayout.LayoutParams(-1,-1));
+  if(gauge!=null&&motionEnabled()){gauge.setAlpha(0f);gauge.post(()->gauge.animate().alpha(1f).setDuration(275).start());}
   LinearLayout actions=new LinearLayout(this);actions.setGravity(Gravity.CENTER);
   // Center round console-style controls beneath the dial, consistently in every journey state.
   FrameLayout.LayoutParams frame=new FrameLayout.LayoutParams(-1,px(58),Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL);
@@ -294,7 +299,8 @@ public class ModernActivity extends MainActivity {
    dial.addView(mini,0,mapLayout);
    // Put the soft circular scrim above the map but below speed labels/ticks.
    // It gently masks the route under the instrument instead of cutting the line off sharply.
-   dial.addView(new DialScrim(this),1,new FrameLayout.LayoutParams(-1,-1));
+   if(!routeFirst)dial.addView(new DialScrim(this),1,new FrameLayout.LayoutParams(-1,-1));
+   else {TextView liveSpeed=label("SPEED  "+Math.round(TrackingService.currentSpeed*(miles?2.236936:3.6))+(miles?" mph":" km/h"),20,Color.WHITE);liveSpeed.setTypeface(null,1);liveSpeed.setPadding(px(15),px(10),px(15),px(10));liveSpeed.setBackground(round(0xd3102836,15));FrameLayout.LayoutParams pos=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.CENTER_HORIZONTAL);pos.topMargin=px(19);dial.addView(liveSpeed,pos);}
    if(TrackingService.paused){
     TextView pauseState=label("Ⅱ  PAUSED",12,0xffd5f6f1);
     pauseState.setPadding(px(12),px(7),px(12),px(7));
@@ -599,6 +605,7 @@ public class ModernActivity extends MainActivity {
    previewTap.setClickable(true);
    mapFrame.addView(previewTap,new FrameLayout.LayoutParams(-1,-1));
    previewTap.setOnClickListener(v->openFullMap(id));
+   Button replay=button("▶  Replay this journey",0xff146a67);block(body,replay,px(48),8);replay.setOnClickListener(v->showReplay(id));
    Button expandMap=button("⛶  Expand interactive map",0xff17635b);
    block(body,expandMap,px(46),8);expandMap.setOnClickListener(v->openFullMap(id));
    Button mapFallback=button("Show offline GPS trace",surface);block(body,mapFallback,px(42),12);
@@ -686,6 +693,81 @@ public class ModernActivity extends MainActivity {
    View fill=new View(this);fill.setBackground(round(accent,8));
    rail.addView(fill,new LinearLayout.LayoutParams(Math.max(px(3),(int)(getResources().getDisplayMetrics().widthPixels*.77*item.getValue()/maxMonth)),px(11)));
    block(body,rail,px(11),14);
+  }
+ }
+ void showReplay(long id){
+  screen=6;init("Replay");headerSmall(body,"Journey replay","Follow the saved route at your own pace");
+  JSONArray track;long started=0,ended=0;
+  try(TripStore db=new TripStore(this);Cursor c=db.one(id)){
+   if(!c.moveToFirst())return;
+   track=new JSONArray(c.getString(c.getColumnIndexOrThrow("points")));
+   started=c.getLong(c.getColumnIndexOrThrow("started"));ended=c.getLong(c.getColumnIndexOrThrow("ended"));
+  }catch(Exception e){Toast.makeText(this,"Unable to load journey",Toast.LENGTH_LONG).show();return;}
+  if(track.length()<2){block(body,label("Not enough GPS points for replay",14,muted),-2,10);return;}
+  boolean timed=track.optJSONArray(0)!=null&&track.optJSONArray(0).length()>=3;
+  block(body,label(timed?"Timed playback from recorded GPS points":"Approximate replay: older journeys have no point timestamps",12,muted),-2,8);
+  android.webkit.WebView replayMap=new android.webkit.WebView(this);
+  replayMap.getSettings().setJavaScriptEnabled(true);
+  replayMap.setBackgroundColor(0xff26353d);
+  block(body,replayMap,px(390),10);
+  String html="<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1'>"
+   +"<link rel='stylesheet' href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'>"
+   +"<style>html,body,#map{height:100%;margin:0;background:#303942}.leaflet-tile-pane{filter:grayscale(1) invert(1) sepia(.2) hue-rotate(148deg) saturate(.8) brightness(.8)}"
+   +".leaflet-control-attribution{font-size:9px;background:#27353ee0!important;color:white!important}</style></head><body><div id='map'></div>"
+   +"<script src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'></script><script>"
+   +"var pts="+track.toString()+";var m=L.map('map');m.attributionControl.setPrefix(false);"
+   +"L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; OpenStreetMap contributors',maxZoom:18}).addTo(m);"
+   +"var ll=pts.map(p=>[p[0],p[1]]);var full=L.polyline(ll,{color:'#526d72',weight:4}).addTo(m);"
+   +"var done=L.polyline([],{color:'#09ded0',weight:5}).addTo(m);"
+   +"var dot=L.circleMarker(ll[0],{radius:8,color:'#ffffff',weight:2,fillColor:'#09ded0',fillOpacity:1}).addTo(m);"
+   +"m.fitBounds(full.getBounds(),{padding:[24,24],maxZoom:16});"
+   +"window.replayAt=function(f){var n=Math.max(0,Math.min(ll.length-1,Math.floor(f*(ll.length-1))));"
+   +"done.setLatLngs(ll.slice(0,n+1));dot.setLatLng(ll[n]);};window.replayAt(0);"
+   +"</script></body></html>";
+  replayMap.loadDataWithBaseURL("https://appassets.androidplatform.net/",html,"text/html","UTF-8",null);
+  TextView progress=label("0% of route",13,accent);block(body,progress,-2,6);
+  SeekBar seek=new SeekBar(this);seek.setMax(1000);block(body,seek,px(44),6);
+  final boolean[] playing={false};final int[] stepMs={65};final long[] replayLast={0};
+  seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+   public void onStartTrackingTouch(SeekBar b){playing[0]=false;}
+   public void onStopTrackingTouch(SeekBar b){}
+   public void onProgressChanged(SeekBar b,int value,boolean user){
+    replayMap.evaluateJavascript("if(window.replayAt)window.replayAt("+(value/1000.0)+");",null);
+    progress.setText(Math.round(value/10f)+"% of route");
+   }
+  });
+  LinearLayout buttons=new LinearLayout(this);
+  Button play=button("▶ Play",0xff087f79),speedButton=button("1× speed",surface);
+  LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,px(53),1);lp.rightMargin=px(8);
+  buttons.addView(play,lp);buttons.addView(speedButton,new LinearLayout.LayoutParams(0,px(53),1));
+  block(body,buttons,px(53),8);
+  play.setOnClickListener(v->{playing[0]=!playing[0];play.setText(playing[0]?"Ⅱ Pause":"▶ Play");});
+  speedButton.setOnClickListener(v->{int[] speeds={65,32,16};String[] names={"1× speed","2× speed","4× speed"};int next=stepMs[0]==65?1:stepMs[0]==32?2:0;stepMs[0]=speeds[next];speedButton.setText(names[next]);});
+  handler.postDelayed(new Runnable(){public void run(){
+   if(screen!=6)return;
+   if(playing[0]){
+    int next=seek.getProgress()+Math.max(1,(int)Math.ceil(1000d/Math.max(2,track.length())*(65d/stepMs[0])));
+    if(next>=1000){seek.setProgress(1000);playing[0]=false;play.setText("▶ Replay");}
+    else seek.setProgress(next);
+   }
+   handler.postDelayed(this,65);
+  }},65);
+ }
+ class SpeedChart extends View{
+  final float[] values; final Paint pen=new Paint(3);final boolean distribution;
+  SpeedChart(Context ctx,float[] v,boolean histogram){super(ctx);values=v;distribution=histogram;setBackground(round(0xff182c39,15));}
+  @Override protected void onDraw(Canvas c){
+   super.onDraw(c);float w=getWidth(),h=getHeight(),pad=px(18);if(values.length==0)return;
+   float max=1;for(float v:values)max=Math.max(max,v);
+   pen.setStrokeWidth(px(1));pen.setColor(0xff385364);pen.setStyle(Paint.Style.STROKE);
+   for(int i=1;i<4;i++)c.drawLine(pad,h*i/4,w-pad,h*i/4,pen);
+   pen.setColor(accent);
+   if(distribution){float bw=(w-pad*2)/values.length;pen.setStyle(Paint.Style.FILL);
+    for(int i=0;i<values.length;i++){float bh=(h-2*pad)*values[i]/max;c.drawRoundRect(pad+bw*i+px(2),h-pad-bh,pad+bw*(i+1)-px(2),h-pad,px(3),px(3),pen);}
+   }else{Path path=new Path();for(int i=0;i<values.length;i++){
+     float x=pad+(w-2*pad)*i/Math.max(1,values.length-1),y=h-pad-(h-2*pad)*values[i]/max;
+     if(i==0)path.moveTo(x,y);else path.lineTo(x,y);
+    }pen.setStyle(Paint.Style.STROKE);pen.setStrokeWidth(px(2));c.drawPath(path,pen);}
   }
  }
  class RouteThumbnail extends View {
