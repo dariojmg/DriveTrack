@@ -126,7 +126,7 @@ public class ModernActivity extends MainActivity {
   });
   setContentView(root);root.requestApplyInsets();
   LinearLayout header=new LinearLayout(this);header.setGravity(Gravity.CENTER_VERTICAL);header.setPadding(px(16),px(8),px(16),px(11));
-  if(!title.equals("Dashboard")&&!title.equals("History")&&!title.equals("Settings")){
+  if(!title.equals("Dashboard")&&!title.equals("History")&&!title.equals("Settings")&&!title.equals("Insights")){
    TextView back=label("‹",32,accent);back.setGravity(Gravity.CENTER);back.setContentDescription("Back");
    header.addView(back,new LinearLayout.LayoutParams(px(48),px(48)));
    back.setOnClickListener(v->goBackFrom(title));
@@ -137,14 +137,27 @@ public class ModernActivity extends MainActivity {
   body=vertical();body.setPadding(px(12),0,px(12),0);
   if(title.equals("Dashboard")||title.equals("HUD"))root.addView(body,new LinearLayout.LayoutParams(-1,0,1));
   else{ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.addView(body);root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));}
-  LinearLayout nav=new LinearLayout(this);nav.setPadding(px(10),px(3),px(10),px(5));
-  for(String entry:new String[]{"◉  Drive","▤  History","⚙  Settings"}){
-   Button tab=button(entry,entry.contains(title.equals("Dashboard")||title.equals("HUD")?"Drive":title.equals("Settings")?"Settings":"History")?0xff19544d:surface);
-   tab.setTextColor(entry.contains(title.equals("Dashboard")?"Drive":title.equals("Settings")?"Settings":"History")?accent:muted);
-   LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,px(49),1);lp.setMargins(px(2),0,px(2),0);nav.addView(tab,lp);
-   tab.setOnClickListener(v->{hud=false;if(entry.contains("Drive"))showDashboard();else if(entry.contains("History"))showHistory();else showSettings();});
+  LinearLayout nav=new LinearLayout(this);nav.setPadding(px(10),px(5),px(10),px(7));
+  nav.setBackgroundColor(0xff0b1b29);
+  String[] names={"◉","▤","▥","⚙"};
+  String[] titles={"Drive","Trips","Stats","Settings"};
+  int selected=title.equals("Dashboard")||title.equals("HUD")?0:title.equals("History")?1:title.equals("Insights")?2:3;
+  for(int i=0;i<4;i++){
+   final int index=i;
+   LinearLayout item=vertical();item.setGravity(Gravity.CENTER);
+   item.setPadding(px(3),px(3),px(3),px(3));
+   item.setBackground(round(i==selected?0xff193947:0xff0b1b29,14));
+   TextView glyph=label(names[i],21,i==selected?accent:0xff7b9baa);glyph.setGravity(Gravity.CENTER);
+   item.addView(glyph,new LinearLayout.LayoutParams(-1,px(25)));
+   TextView word=label(titles[i],10,i==selected?0xffc6f8ee:muted);word.setTypeface(null,i==selected?1:0);
+   word.setGravity(Gravity.CENTER);item.addView(word,new LinearLayout.LayoutParams(-1,px(17)));
+   LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,px(51),1);lp.setMargins(px(2),0,px(2),0);nav.addView(item,lp);
+   item.setClickable(true);item.setFocusable(true);item.setContentDescription(titles[i]+" tab");
+   item.setOnClickListener(v->{
+    if(index==0)showDashboard();else if(index==1)showHistory();else if(index==2)showInsights();else showSettings();
+   });
   }
-  if(title.equals("Dashboard")||title.equals("History")||title.equals("Settings"))root.addView(nav);
+  if(title.equals("Dashboard")||title.equals("History")||title.equals("Insights")||title.equals("Settings"))root.addView(nav);
  }
  void goBackFrom(String title){
   if(title.equals("Details")||title.equals("Insights"))showHistory();
@@ -226,7 +239,7 @@ public class ModernActivity extends MainActivity {
   signal.setBackground(round(surface,16));
   signal.addView(label("◉   GPS STATUS",11,muted),new LinearLayout.LayoutParams(0,-2,1));
   gpsValue=label("Acquiring signal",12,accent);signal.addView(gpsValue);
-  block(body,signal,px(40),4);
+  block(body,signal,px(40),9);
   FrameLayout dial=new FrameLayout(this);
   dial.setBackground(round(0xff081827,22));dial.setClipToOutline(true);
   gauge=new Gauge(this);dial.addView(gauge,new FrameLayout.LayoutParams(-1,-1));
@@ -255,7 +268,7 @@ public class ModernActivity extends MainActivity {
   boolean showMap=getPreferences(0).getBoolean("showLiveMap",true);
   // Let the dial take remaining space; map and stats retain guaranteed heights.
   LinearLayout.LayoutParams dialLayout=new LinearLayout.LayoutParams(-1,0,1);dialLayout.bottomMargin=px(11);body.addView(dial,dialLayout);
-  dial.setElevation(px(3));
+  dial.setElevation(px(4));
   if(showMap){
    FrameLayout mini=new FrameLayout(this);mini.setBackground(round(0xff0a2434,16));mini.setClipToOutline(true);
    liveMap=new android.webkit.WebView(this);liveMap.setBackgroundColor(surface);
@@ -265,12 +278,12 @@ public class ModernActivity extends MainActivity {
    // A vertical shade keeps the speed numerals readable over moving streets.
    View shade=new View(this);
    GradientDrawable overlayShade=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-     new int[]{0x91081827,0x48081827,0x10081827,0x00081827});
+     new int[]{0xf6081827,0xdb081827,0x66081827,0x00081827});
    shade.setBackground(overlayShade);
    mini.addView(shade,new FrameLayout.LayoutParams(-1,-1));
    View overlay=new View(this);overlay.setClickable(true);overlay.setContentDescription("Open live map");
    mini.addView(overlay,new FrameLayout.LayoutParams(-1,-1));
-   TextView mapNote=label("● LIVE ROUTE",11,0xffc5f5f0);
+   TextView mapNote=label("● LIVE TRACK",11,0xffc5f5f0);
    mapNote.setPadding(px(12),px(6),px(12),px(6));mapNote.setBackground(round(0xdd0b1b29,12));
    FrameLayout.LayoutParams notePosition=new FrameLayout.LayoutParams(-2,-2,Gravity.BOTTOM|Gravity.LEFT);
    notePosition.leftMargin=px(10);notePosition.bottomMargin=px(9);mini.addView(mapNote,notePosition);
