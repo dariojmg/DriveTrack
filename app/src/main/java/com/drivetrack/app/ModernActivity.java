@@ -464,7 +464,7 @@ public class ModernActivity extends MainActivity {
  @Override void updateDashboard(){
   updateScreenAwake();
   if(screen==0){
-   if(gpsValue!=null)gpsValue.setText(TrackingService.active&&!TrackingService.gpsIssue.isEmpty()?TrackingService.gpsIssue:!TrackingService.active?"○ Waiting for GPS":TrackingService.paused?"Ⅱ Paused":TrackingService.lastFixTime>0&&System.currentTimeMillis()-TrackingService.lastFixTime>8000?"○ Signal lost":TrackingService.accuracy<=10&&TrackingService.lastFixTime>0?"● Strong · ±"+(int)TrackingService.accuracy+" m":TrackingService.accuracy<=25&&TrackingService.lastFixTime>0?"● Fair · ±"+(int)TrackingService.accuracy+" m":TrackingService.lastFixTime>0?"○ Poor · ±"+(int)TrackingService.accuracy+" m":"○ Acquiring GPS");
+   if(gpsValue!=null)gpsValue.setText(TrackingService.active&&!TrackingService.gpsIssue.isEmpty()?TrackingService.gpsIssue:!TrackingService.active?"○ Waiting for GPS":TrackingService.paused?"Ⅱ Paused":TrackingService.lastFixTime>0&&System.currentTimeMillis()-TrackingService.lastFixTime>8000?"○ Signal lost":TrackingService.accuracy<=10&&TrackingService.lastFixTime>0?"● Strong · ±"+(int)TrackingService.accuracy+" m":TrackingService.accuracy<=25&&TrackingService.lastFixTime>0?"● Fair · ±"+(int)TrackingService.accuracy+" m":TrackingService.lastFixTime>0?"○ Poor · ±"+(int)TrackingService.accuracy+" m":"○ Acquiring · "+insightDuration(System.currentTimeMillis()-TrackingService.started));
    if(distanceValue!=null)distanceValue.setText(dist(TrackingService.distance));
    if(driveTimeValue!=null)driveTimeValue.setText(TrackingService.active?duration(TrackingService.elapsedActiveMs()):"00:00");
    if(currentLocationValue!=null){updatePlaceDisplay();updatePlaceName();}
@@ -475,7 +475,7 @@ public class ModernActivity extends MainActivity {
     mapPending.setVisibility(fix?View.GONE:View.VISIBLE);
     if(!fix)mapPending.setText(!TrackingService.gpsIssue.isEmpty()?TrackingService.gpsIssue:TrackingService.lastFixTime>0?
       "GPS signal lost · Waiting for accurate coordinates":
-      "Searching for GPS satellites · Move outdoors for a stronger signal");
+      "Recording time "+insightDuration(System.currentTimeMillis()-TrackingService.started)+" · Waiting for first GPS fix (distance starts with GPS)");
    }
    if(liveMap!=null&&TrackingService.active&&TrackingService.lastFixTime>0)updateLiveMap();
   }else if(screen==4&&digitalSpeed!=null)digitalSpeed.setText(String.valueOf(Math.round(TrackingService.currentSpeed*(miles?2.236936:3.6))));
@@ -519,7 +519,43 @@ public class ModernActivity extends MainActivity {
   updateDashboard();
   handler.postDelayed(new Runnable(){public void run(){if(screen==4){updateDashboard();handler.postDelayed(this,1000);}}},1000);
  }
- @Override void showHistory(){
+ @Override 
+ static class GpsReport {
+  boolean available=false;int count=0;double median=Double.NaN;long fixDelay=0,maxGap=0;String status="No GPS samples";
+  String detail="Older journey: detailed GPS accuracy information is unavailable.";
+ }
+ GpsReport gpsReport(long started,String serialized){
+  GpsReport report=new GpsReport();
+  try{
+   JSONArray samples=new JSONArray(serialized==null?"[]":serialized);
+   ArrayList<Double> accuracies=new ArrayList<>();
+   long first=0,previous=0;
+   for(int i=0;i<samples.length();i++){
+    JSONArray sample=samples.optJSONArray(i);if(sample==null||sample.length()<4)continue;
+    long t=sample.optLong(0,0);double accuracy=sample.optDouble(3,Double.NaN);
+    if(t<=0||Double.isNaN(accuracy)||accuracy<0)continue;
+    if(first==0)first=t;
+    if(previous>0&&t>previous)report.maxGap=Math.max(report.maxGap,t-previous);
+    previous=t;accuracies.add(accuracy);
+   }
+   if(accuracies.size()<2)return report;
+   report.available=true;report.count=accuracies.size();
+   Collections.sort(accuracies);
+   report.median=accuracies.get(accuracies.size()/2);
+   report.fixDelay=Math.max(0,first-started);
+   boolean warn=report.median>15||report.maxGap>10000||report.fixDelay>30000;
+   report.status=warn?"GPS: Review":"GPS: Good";
+   StringBuilder details=new StringBuilder();
+   details.append("Median reported accuracy: ").append(String.format(Locale.getDefault(),"%.1f m",report.median));
+   details.append("  ·  First fix: ").append(insightDuration(report.fixDelay));
+   details.append("  ·  Longest gap: ").append(String.format(Locale.getDefault(),"%.1f s",report.maxGap/1000d));
+   if(warn)details.append("\nReview advised: delayed acquisition, signal gaps or lower accuracy. These do not necessarily mean the recorded distance is wrong.");
+   else details.append("\nNo major GPS reception warning detected.");
+   report.detail=details.toString();
+  }catch(Exception ignored){}
+  return report;
+ }
+ void showHistory(){
   screen=1;init("History");headerSmall(body,"Your journeys","All your drives, organised by date");
   try(TripStore db=new TripStore(this);Cursor c=db.all()){
    int count=0;double sum=0;long totalMs=0;
@@ -573,7 +609,9 @@ public class ModernActivity extends MainActivity {
      heading.addView(menu,new LinearLayout.LayoutParams(px(44),px(42)));
      block(info,heading,-2,2);
      block(info,label(date(start)+"   ·   "+duration(time),11,muted),-2,7);
-     TextView figures=label(dis+"   ·   "+speed(max)+" max",13,accent);figures.setTypeface(null,1);block(info,figures,-2,0);
+     TextView figures=label(dis+"   ·   "+speed(max)+" max",13,accent);figures.setTypeface(null,1);block(info,figures,-2,2);
+     GpsReport report=gpsReport(start,c.getString(c.getColumnIndexOrThrow("telemetry")));
+     block(info,label(report.status,10,report.available?(report.status.contains("Review")?0xffffbc79:0xff82dacd):muted),-2,0);
      block(entries,card,px(104),8);
      card.setOnClickListener(v->showDetail(id));
      menu.setOnClickListener(v->{
@@ -619,6 +657,13 @@ public class ModernActivity extends MainActivity {
    String notes=c.getString(c.getColumnIndexOrThrow("notes"));if(notes==null)notes="";
    final String origTitle=tripTitle,origNotes=notes;
    headerSmall(body,tripTitle,date(started));
+   GpsReport gps=gpsReport(started,c.getString(c.getColumnIndexOrThrow("telemetry")));
+   LinearLayout gpsCard=vertical();gpsCard.setPadding(px(14),px(11),px(14),px(11));
+   gpsCard.setBackground(round(surface,14));
+   TextView gpsTitle=label(gps.status,14,gps.available?(gps.status.contains("Review")?0xffffbc79:0xff82dacd):muted);
+   gpsTitle.setTypeface(null,1);block(gpsCard,gpsTitle,-2,6);
+   block(gpsCard,label(gps.detail,12,0xffc0d1dd),-2,0);
+   block(body,gpsCard,-2,11);
    if(!notes.trim().isEmpty()){
     LinearLayout noteCard=tile("NOTES",notes);
     ((TextView)noteCard.getChildAt(1)).setTextSize(14);
@@ -721,40 +766,38 @@ public class ModernActivity extends MainActivity {
   twoStats(body,"DRIVE TIME",insightDuration(duration),"TOP SPEED",speed(highest));
   twoStats(body,"AVG JOURNEY",dist(count==0?0:metres/count),"LONGEST",dist(longest));
   headerSmall(body,"Speed insights","Speed samples from your recorded journeys");
-  ArrayList<Float> collected=new ArrayList<>();float[] speedBuckets=new float[6];
+  ArrayList<Float> journeyAverages=new ArrayList<>();float[] speedBuckets=new float[6];
+  int reviewCount=0,unavailableCount=0;
   int journeysWithSamples=0;double combined=0;long samplesCount=0;
   try(TripStore store=new TripStore(this);Cursor row=store.all()){
    while(row.moveToNext()){
     String raw=row.getString(row.getColumnIndexOrThrow("telemetry"));if(raw==null)continue;
+    GpsReport report=gpsReport(row.getLong(row.getColumnIndexOrThrow("started")),raw);
+    if(!report.available)unavailableCount++;
+    else if(report.status.contains("Review"))reviewCount++;
     JSONArray samples=new JSONArray(raw);if(samples.length()<2)continue;journeysWithSamples++;
+    double tripTotal=0;long tripCount=0;
     for(int i=0;i<samples.length();i++){
      JSONArray v=samples.optJSONArray(i);if(v==null||v.length()<3)continue;
      double kmh=Math.max(0,v.optDouble(2,0)*3.6);
      speedBuckets[Math.min(5,(int)(kmh/20))]++;
      combined+=kmh;samplesCount++;
-     collected.add((float)kmh);
+     tripTotal+=kmh;tripCount++;
     }
+    if(tripCount>0)journeyAverages.add((float)(tripTotal/tripCount));
    }
   }catch(Exception ignored){}
+  Collections.reverse(journeyAverages);
   if(samplesCount==0)block(body,label("No detailed speed samples in saved trips yet",13,muted),-2,12);
   else{
    twoStats(body,"SAMPLED AVG",String.format(Locale.getDefault(),"%.1f km/h",combined/samplesCount),"TRIPS WITH DATA",""+journeysWithSamples);
-   TextView trendTitle=label("Speed trend",18,0xfff4f8fb);trendTitle.setTypeface(null,1);block(body,trendTitle,-2,5);
-   TextView sampleChip=label(String.format(Locale.getDefault(),"%,d GPS samples",samplesCount),12,0xffc9f7ee);
-   sampleChip.setPadding(px(11),px(7),px(11),px(7));sampleChip.setBackground(round(0xff1d4850,12));
-   block(body,sampleChip,-2,9);
-   // Display aggregation covers ALL stored samples, not only the first 700.
-   // Equal-sized sequential buckets make the graph legible without changing stored telemetry.
-   int bins=Math.min(120,collected.size());
-   float[] vals=new float[bins];
-   for(int b=0;b<bins;b++){
-    int from=(int)((long)b*collected.size()/bins);
-    int to=(int)((long)(b+1)*collected.size()/bins);
-    double sum=0;for(int j=from;j<to;j++)sum+=collected.get(j);
-    vals[b]=(float)(sum/Math.max(1,to-from));
-   }
+   TextView trendTitle=label("Average speed by journey",18,0xfff4f8fb);trendTitle.setTypeface(null,1);block(body,trendTitle,-2,6);
+   block(body,label(journeyAverages.size()+" journeys with usable speed readings · oldest to newest",12,muted),-2,7);
+   float[] vals=new float[journeyAverages.size()];
+   for(int i=0;i<vals.length;i++)vals[i]=journeyAverages.get(i);
    block(body,new SpeedChart(this,vals,false),px(216),7);
-   block(body,label("Average speed per sample group · sequence across journeys, not elapsed time",11,muted),-2,18);
+   block(body,label("Each point is one journey's average GPS sample speed, not elapsed-time speed.",11,muted),-2,16);
+   block(body,label("GPS data quality  ·  "+reviewCount+" review  ·  "+unavailableCount+" without diagnostics",12,0xffc9d7e1),-2,14);
    block(body,label("Speed distribution",15,0xfff4f8fb),-2,2);
    block(body,label("Share of GPS readings in each speed range · % of samples",11,muted),-2,7);
    block(body,new SpeedChart(this,speedBuckets,true),px(152),16);
@@ -873,9 +916,9 @@ public class ModernActivity extends MainActivity {
     p.setColor(0xff25dfd1);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(px(3));p.setStrokeJoin(Paint.Join.ROUND);
     c.drawPath(path,p);
     p.setStyle(Paint.Style.FILL);p.setTextSize(px(12));p.setColor(0xffb4cad8);
-    p.setTextAlign(Paint.Align.LEFT);c.drawText("Start",left,bottom+px(23),p);
+    p.setTextAlign(Paint.Align.LEFT);c.drawText("Oldest",left,bottom+px(23),p);
     p.setTextAlign(Paint.Align.CENTER);c.drawText("Middle",(left+right)/2,bottom+px(23),p);
-    p.setTextAlign(Paint.Align.RIGHT);c.drawText("End",right,bottom+px(23),p);
+    p.setTextAlign(Paint.Align.RIGHT);c.drawText("Newest",right,bottom+px(23),p);
     p.setTextAlign(Paint.Align.LEFT);p.setTextSize(px(12));c.drawText("km/h",left,px(18),p);
    }
   }
