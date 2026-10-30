@@ -519,7 +519,6 @@ public class ModernActivity extends MainActivity {
   updateDashboard();
   handler.postDelayed(new Runnable(){public void run(){if(screen==4){updateDashboard();handler.postDelayed(this,1000);}}},1000);
  }
- @Override 
  static class GpsReport {
   boolean available=false;int count=0;double median=Double.NaN;long fixDelay=0,maxGap=0;String status="No GPS samples";
   String detail="Older journey: detailed GPS accuracy information is unavailable.";
@@ -555,7 +554,7 @@ public class ModernActivity extends MainActivity {
   }catch(Exception ignored){}
   return report;
  }
- void showHistory(){
+ @Override void showHistory(){
   screen=1;init("History");headerSmall(body,"Your journeys","All your drives, organised by date");
   try(TripStore db=new TripStore(this);Cursor c=db.all()){
    int count=0;double sum=0;long totalMs=0;
