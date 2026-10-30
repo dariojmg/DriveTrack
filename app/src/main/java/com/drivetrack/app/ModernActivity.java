@@ -814,20 +814,29 @@ public class ModernActivity extends MainActivity {
   }
  }
  void showReplay(long id){
-  screen=6;init("Replay");headerSmall(body,"Journey replay","Follow the saved route at your own pace");
-  JSONArray track;long started=0,ended=0;
+  screen=6;init("Replay");headerSmall(body,"Journey replay","Explore your recorded drive");
+  JSONArray track;JSONArray samples=new JSONArray();long started=0,ended=0;
   try(TripStore db=new TripStore(this);Cursor c=db.one(id)){
    if(!c.moveToFirst())return;
    track=new JSONArray(c.getString(c.getColumnIndexOrThrow("points")));
+   String raw=c.getString(c.getColumnIndexOrThrow("telemetry"));
+   if(raw!=null)samples=new JSONArray(raw);
    started=c.getLong(c.getColumnIndexOrThrow("started"));ended=c.getLong(c.getColumnIndexOrThrow("ended"));
   }catch(Exception e){Toast.makeText(this,"Unable to load journey",Toast.LENGTH_LONG).show();return;}
   if(track.length()<2){block(body,label("Not enough GPS points for replay",14,muted),-2,10);return;}
   boolean timed=track.optJSONArray(0)!=null&&track.optJSONArray(0).length()>=3;
-  block(body,label(timed?"Timed playback from recorded GPS points":"Approximate replay: older journeys have no point timestamps",12,muted),-2,8);
+  long firstTime=timed?track.optJSONArray(0).optLong(2):started;
+  long lastTime=timed?track.optJSONArray(track.length()-1).optLong(2):ended;
+  if(lastTime<=firstTime){timed=false;firstTime=started;lastTime=Math.max(started+1000,ended);}
+  final boolean hasTimestamps=timed;
+  final long initialTime=firstTime;
+  final long replayDuration=Math.max(1000,lastTime-firstTime);
+  final JSONArray gpsSamples=samples;
+  block(body,label(hasTimestamps?"Playback using recorded GPS timestamps":"Approximate route replay · timestamps unavailable",12,muted),-2,9);
+
   android.webkit.WebView replayMap=new android.webkit.WebView(this);
-  replayMap.getSettings().setJavaScriptEnabled(true);
-  replayMap.setBackgroundColor(0xff26353d);
-  block(body,replayMap,px(390),10);
+  replayMap.getSettings().setJavaScriptEnabled(true);replayMap.setBackgroundColor(0xff26353d);
+  block(body,replayMap,px(355),10);
   String html="<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1'>"
    +"<link rel='stylesheet' href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'>"
    +"<style>html,body,#map{height:100%;margin:0;background:#303942}.leaflet-tile-pane{filter:grayscale(1) invert(1) sepia(.2) hue-rotate(148deg) saturate(.8) brightness(.8)}"
@@ -844,25 +853,66 @@ public class ModernActivity extends MainActivity {
    +"done.setLatLngs(ll.slice(0,n+1));dot.setLatLng(ll[n]);};window.replayAt(0);"
    +"</script></body></html>";
   replayMap.loadDataWithBaseURL("https://appassets.androidplatform.net/",html,"text/html","UTF-8",null);
-  TextView progress=label("0% of route",13,accent);block(body,progress,-2,6);
-  SeekBar seek=new SeekBar(this);seek.setMax(1000);block(body,seek,px(44),6);
+
+  LinearLayout telemetryCards=new LinearLayout(this);
+  String[] headings={"TIME","SPEED","ELAPSED"};
+  TextView[] values=new TextView[3];
+  for(int i=0;i<3;i++){
+   LinearLayout card=vertical();card.setPadding(px(8),px(11),px(8),px(10));
+   card.setGravity(Gravity.CENTER);card.setBackground(round(surface,15));
+   TextView caption=label(headings[i],10,muted);caption.setGravity(Gravity.CENTER);
+   block(card,caption,-2,5);
+   values[i]=label("—",i==1?17:18,0xfff3f8fb);values[i].setTypeface(null,1);values[i].setGravity(Gravity.CENTER);
+   block(card,values[i],-2,0);
+   LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(0,px(78),1);
+   if(i<2)cp.rightMargin=px(7);telemetryCards.addView(card,cp);
+  }
+  block(body,telemetryCards,px(78),11);
+
+  LinearLayout progressRow=new LinearLayout(this);progressRow.setGravity(Gravity.CENTER_VERTICAL);
+  TextView progress=label("0% of route",13,accent);progressRow.addView(progress,new LinearLayout.LayoutParams(0,-2,1));
+  TextView clockProgress=label("00:00 / "+replayClock(replayDuration),13,0xffd7e8ef);progressRow.addView(clockProgress);
+  block(body,progressRow,-2,1);
+  SeekBar seek=new SeekBar(this);seek.setMax(1000);block(body,seek,px(43),7);
   final boolean[] playing={false};final int[] speedFactor={1};
-  final long replayDuration=timed?Math.max(1000,track.optJSONArray(track.length()-1).optLong(2)-track.optJSONArray(0).optLong(2)):Math.max(1000,(track.length()-1)*1000L);
-  seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
-   public void onStartTrackingTouch(SeekBar b){playing[0]=false;}
-   public void onStopTrackingTouch(SeekBar b){}
-   public void onProgressChanged(SeekBar b,int value,boolean user){
-    replayMap.evaluateJavascript("if(window.replayAt)window.replayAt("+(value/1000.0)+");",null);
-    progress.setText(Math.round(value/10f)+"% of route");
-   }
-  });
   LinearLayout buttons=new LinearLayout(this);
   Button play=button("▶ Play",0xff087f79),speedButton=button("1× speed",surface);
   LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,px(53),1);lp.rightMargin=px(8);
   buttons.addView(play,lp);buttons.addView(speedButton,new LinearLayout.LayoutParams(0,px(53),1));
   block(body,buttons,px(53),8);
-  play.setOnClickListener(v->{playing[0]=!playing[0];play.setText(playing[0]?"Ⅱ Pause":"▶ Play");});
-  speedButton.setOnClickListener(v->{speedFactor[0]=speedFactor[0]==1?2:speedFactor[0]==2?4:1;speedButton.setText(speedFactor[0]+"× speed");});
+
+  seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+   public void onStartTrackingTouch(SeekBar b){playing[0]=false;play.setText("▶ Play");}
+   public void onStopTrackingTouch(SeekBar b){}
+   public void onProgressChanged(SeekBar b,int value,boolean user){
+    double fraction=value/1000d;
+    long elapsed=Math.round(fraction*replayDuration);
+    replayMap.evaluateJavascript("if(window.replayAt)window.replayAt("+fraction+");",null);
+    progress.setText(Math.round(value/10f)+"% of route");
+    clockProgress.setText(replayClock(elapsed)+" / "+replayClock(replayDuration));
+    values[0].setText(hasTimestamps?new SimpleDateFormat("HH:mm:ss",Locale.getDefault()).format(new Date(initialTime+elapsed)):"—");
+    values[2].setText(replayClock(elapsed));
+    if(!hasTimestamps||gpsSamples.length()==0){values[1].setText("N/A");return;}
+    long target=initialTime+elapsed;
+    double closestDelta=Double.MAX_VALUE;double closestSpeed=Double.NaN;
+    // Telemetry is a separately sampled GPS stream. Never invent a reading for missing coverage.
+    for(int i=0;i<gpsSamples.length();i++){
+     JSONArray sample=gpsSamples.optJSONArray(i);
+     if(sample==null||sample.length()<3)continue;
+     long timestamp=sample.optLong(0,0);double speed=sample.optDouble(2,Double.NaN);
+     if(timestamp<=0||Double.isNaN(speed)||speed<0)continue;
+     double delta=Math.abs((double)timestamp-target);
+     if(delta<closestDelta){closestDelta=delta;closestSpeed=speed;}
+    }
+    values[1].setText(closestDelta<=3000&&!Double.isNaN(closestSpeed)?
+      Math.round(closestSpeed*(miles?2.236936:3.6))+(miles?" mph":" km/h"):"N/A");
+   }
+  });
+  seek.setProgress(0);
+  play.setOnClickListener(v->{if(seek.getProgress()>=1000)seek.setProgress(0);
+   playing[0]=!playing[0];play.setText(playing[0]?"Ⅱ Pause":"▶ Play");});
+  speedButton.setOnClickListener(v->{speedFactor[0]=speedFactor[0]==1?2:speedFactor[0]==2?4:1;
+   speedButton.setText(speedFactor[0]+"× speed");});
   handler.postDelayed(new Runnable(){public void run(){
    if(screen!=6)return;
    if(playing[0]){
@@ -872,6 +922,11 @@ public class ModernActivity extends MainActivity {
    }
    handler.postDelayed(this,65);
   }},65);
+ }
+ String replayClock(long ms){
+  long seconds=Math.max(0,ms/1000);
+  return seconds>=3600?String.format(Locale.getDefault(),"%d:%02d:%02d",seconds/3600,(seconds/60)%60,seconds%60)
+   :String.format(Locale.getDefault(),"%02d:%02d",seconds/60,seconds%60);
  }
  class SpeedChart extends View{
   final float[] values;final Paint p=new Paint(3);final boolean distribution;
