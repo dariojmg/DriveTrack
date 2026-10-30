@@ -66,8 +66,19 @@ public class TrackingService extends Service implements LocationListener {
     distance+=d;if(speed>0.8)movingMs+=dt;
    }
   }
+  // Adaptive smoothing: quick response to real acceleration/braking, calm at steady speed.
+  // Time-aware alpha keeps behaviour consistent when GPS callbacks are irregular.
   if(previousValidSpeed<0)currentSpeed=speed;
-  else currentSpeed=.65*currentSpeed+.35*speed;
+  else {
+   double dtSeconds=Math.max(.2,Math.min(3.0,(now-lastAt)/1000.0));
+   double change=Math.abs(speed-currentSpeed);
+   double baseAlpha=change>=2.0?.82:change>=.7?.68:.45;
+   // Avoid reporting motion from minor GPS drift while stationary.
+   if(speed<.6&&currentSpeed<1.5)baseAlpha=.85;
+   double alpha=1-Math.pow(1-baseAlpha,dtSeconds);
+   currentSpeed=Math.max(0,currentSpeed+alpha*(speed-currentSpeed));
+   if(speed<.35&&currentSpeed<.6)currentSpeed=0;
+  }
   previousValidSpeed=speed;maxSpeed=Math.max(maxSpeed,speed);
   try{org.json.JSONArray sample=new org.json.JSONArray();
    sample.put(System.currentTimeMillis());sample.put(Math.round(rawSpeed*100.0)/100.0);
