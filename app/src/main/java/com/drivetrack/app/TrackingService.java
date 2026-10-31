@@ -10,6 +10,8 @@ public class TrackingService extends Service implements LocationListener {
  public static double lastRawSpeed=0;
  public static float speedAccuracy=Float.NaN;
  public static String filterMode="waiting";
+ public static String gpsConfidenceNote="";
+ private int questionableLowSpeedSamples=0;
  public static long lastAcceptedFixAgeMs(){return lastFixTime<=0?-1:System.currentTimeMillis()-lastFixTime;}
  public static double visibleSpeed(){return active&&!paused&&lastFixTime>0&&lastAcceptedFixAgeMs()<3500?currentSpeed:0;}
  public static float accuracy=0;
@@ -34,7 +36,7 @@ public class TrackingService extends Service implements LocationListener {
    try{lm.requestLocationUpdates(LocationManager.GPS_PROVIDER,1000,0,this);}catch(SecurityException ignored){}
    sendBroadcast(new Intent(UPDATE).setPackage(getPackageName()));return START_STICKY;
   }
-  if(!active){started=System.currentTimeMillis();movingMs=0;pausedMs=0;pausedAt=0;paused=false;distance=0;maxSpeed=0;currentSpeed=0;rejectedFixes=0;lastFixTime=0;points=new JSONArray();telemetry=new JSONArray();last=null;lastAt=0;previousValidSpeed=-1;lastRawSpeed=0;speedAccuracy=Float.NaN;filterMode="acquiring";active=true;getSharedPreferences("recovery",0).edit().putLong("started",started).apply();}
+  if(!active){started=System.currentTimeMillis();movingMs=0;pausedMs=0;pausedAt=0;paused=false;distance=0;maxSpeed=0;currentSpeed=0;rejectedFixes=0;lastFixTime=0;points=new JSONArray();telemetry=new JSONArray();last=null;lastAt=0;previousValidSpeed=-1;lastRawSpeed=0;speedAccuracy=Float.NaN;filterMode="acquiring";gpsConfidenceNote="";questionableLowSpeedSamples=0;active=true;getSharedPreferences("recovery",0).edit().putLong("started",started).apply();}
   updateNotification();
   gpsIssue="";
   try{
@@ -88,6 +90,12 @@ public class TrackingService extends Service implements LocationListener {
    currentSpeed=Math.max(0,currentSpeed+alpha*(speed-currentSpeed));
    if(speed<.35&&currentSpeed<.6)currentSpeed=0;
   }
+  // A low GPS speed with deteriorated positional accuracy can be ambiguous,
+  // especially around roundabouts. Never invent speed or distance: surface uncertainty.
+  if(speed>0.4&&speed<2.3&&accuracy>=7.0f)questionableLowSpeedSamples++;
+  else questionableLowSpeedSamples=0;
+  gpsConfidenceNote=questionableLowSpeedSamples>=5?"GPS speed uncertain · check vehicle speed":"";
+  if(questionableLowSpeedSamples>=5)filterMode="low-speed-uncertain";
   lastRawSpeed=rawSpeed;previousValidSpeed=speed;maxSpeed=Math.max(maxSpeed,speed);
   try{org.json.JSONArray sample=new org.json.JSONArray();
    sample.put(System.currentTimeMillis());sample.put(Math.round(rawSpeed*100.0)/100.0);
@@ -111,7 +119,7 @@ public class TrackingService extends Service implements LocationListener {
   if(distance>=20&&points.length()>=3)
    new TripStore(this).save(started,System.currentTimeMillis(),distance,maxSpeed,movingMs,pausedMs,points.toString(),telemetry.toString());
   getSharedPreferences("recovery",0).edit().clear().apply();
-  distance=0;maxSpeed=0;currentSpeed=0;movingMs=0;accuracy=0;locationText="Waiting for GPS";lastFixTime=0;lastRawSpeed=0;speedAccuracy=Float.NaN;filterMode="waiting";points=new JSONArray();telemetry=new JSONArray();last=null;lastAt=0;
+  distance=0;maxSpeed=0;currentSpeed=0;movingMs=0;accuracy=0;locationText="Waiting for GPS";lastFixTime=0;lastRawSpeed=0;speedAccuracy=Float.NaN;filterMode="waiting";gpsConfidenceNote="";questionableLowSpeedSamples=0;points=new JSONArray();telemetry=new JSONArray();last=null;lastAt=0;
   sendBroadcast(new Intent(UPDATE).setPackage(getPackageName()));
  }
  public void onDestroy(){if(active)try{lm.removeUpdates(this);}catch(Exception ignored){}super.onDestroy();}
