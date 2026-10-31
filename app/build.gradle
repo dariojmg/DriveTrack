@@ -13,9 +13,10 @@ android {
         applicationId 'com.drivetrack.app'
         minSdk 26
         targetSdk 35
-        versionCode 41
-        versionName '2.3.2-beta'
+        versionCode 42
+        versionName '2.4.0-beta'
     }
+    buildFeatures { buildConfig true }
     signingConfigs {
         permanentRelease {
             storeFile file(System.getenv('DRIVETRACK_KEYSTORE_PATH') ?: 'signing-not-configured.p12')
