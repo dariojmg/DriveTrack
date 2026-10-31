@@ -301,7 +301,7 @@ public class ModernActivity extends MainActivity {
    GradientDrawable overlayShade=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
      new int[]{0xf6081827,0xdb081827,0x66081827,0x00081827});
    shade.setBackground(overlayShade);
-   mini.addView(shade,new FrameLayout.LayoutParams(-1,-1));
+   if(!routeFirst)mini.addView(shade,new FrameLayout.LayoutParams(-1,-1));
    View overlay=new View(this);overlay.setClickable(true);overlay.setContentDescription("Open live map");
    mini.addView(overlay,new FrameLayout.LayoutParams(-1,-1));
    TextView mapNote=label("● LIVE TRACK",11,0xffc5f5f0);
@@ -319,7 +319,7 @@ public class ModernActivity extends MainActivity {
    else {
     // The map view has a distinct flat digital instrument, not a second analogue speedometer.
     LinearLayout instrument=vertical();instrument.setPadding(px(17),px(10),px(17),px(11));
-    instrument.setBackground(round(0xf0112838,19));instrument.setElevation(px(5));
+    instrument.setBackground(round(0xd9091827,19));instrument.setElevation(px(5));
     TextView title=label("LIVE SPEED  ·  MAP VIEW",10,0xffa9c4d1);title.setLetterSpacing(.08f);
     instrument.addView(title);
     mapModeSpeed=label("0 km/h",33,0xffffffff);mapModeSpeed.setTypeface(null,1);
@@ -364,7 +364,7 @@ public class ModernActivity extends MainActivity {
     +"if(!clean.length)return;route.setLatLngs(clean);var latest=L.latLng(clean[clean.length-1]);"
     +"if(!shown||!(Number.isFinite(speed)&&speed<1.2&&shown.distanceTo(latest)<8))shown=latest;"
     +"dot.setLatLng(shown);if(!m.hasLayer(dot))dot.addTo(m);m.invalidateSize();"
-    +"var z=15;var offset=m.getSize().y*0.16;"
+    +"var z=15;var offset=m.getSize().y*"+(routeFirst?"0":"0.16")+";"
     +"var centre=m.unproject(m.project(shown,z).subtract(L.point(0,offset)),z);"
     +"if(!hasCentred){m.setView(centre,z,{animate:false});hasCentred=true;}"
     +"else{m.panTo(centre,{animate:true,duration:0.55,easeLinearity:0.5});}};"
@@ -548,7 +548,8 @@ public class ModernActivity extends MainActivity {
    details.append("Median reported accuracy: ").append(String.format(Locale.getDefault(),"%.1f m",report.median));
    details.append("  ·  First fix: ").append(insightDuration(report.fixDelay));
    details.append("  ·  Longest gap: ").append(String.format(Locale.getDefault(),"%.1f s",report.maxGap/1000d));
-   if(warn)details.append("\nReview advised: delayed acquisition, signal gaps or lower accuracy. These do not necessarily mean the recorded distance is wrong.");
+   if(report.maxGap>=5000)details.append("\nGPS interruption recorded (possible tunnel or underground parking). Missing positions are not estimated.");
+    if(warn)details.append("\nReview advised: delayed acquisition, signal gaps or lower accuracy. These do not necessarily mean the recorded distance is wrong.");
    else details.append("\nNo major GPS reception warning detected.");
    report.detail=details.toString();
   }catch(Exception ignored){}
@@ -685,10 +686,10 @@ public class ModernActivity extends MainActivity {
    mapFallback.setOnClickListener(v->{mapFrame.removeAllViews();mapFrame.addView(new RouteView(this,coords),new FrameLayout.LayoutParams(-1,-1));});
    twoStats(body,"DISTANCE",dist(metres),"TOP SPEED",speed(max));
    long effective=Math.max(0,ended-started-pause);
-   twoStats(body,"DURATION",duration(effective),"MOVING AVG",speed(metres/Math.max(1,moving/1000d)));
+   twoStats(body,"DURATION",insightDuration(effective),"MOVING AVG",speed(metres/Math.max(1,moving/1000d)));
    LinearLayout technical=vertical();
-   twoStats(technical,"OVERALL AVG",speed(metres/Math.max(1,effective/1000d)),"STOPPED",duration(Math.max(0,effective-moving)));
-   twoStats(technical,"PAUSED",duration(pause),"GPS POINTS",String.valueOf(coords.length()));
+   twoStats(technical,"OVERALL AVG",speed(metres/Math.max(1,effective/1000d)),"STOPPED",insightDuration(Math.max(0,effective-moving)));
+   twoStats(technical,"PAUSED",insightDuration(pause),"GPS POINTS",String.valueOf(coords.length()));
    Button detailToggle=button("Technical details   ⌄",surface);block(body,detailToggle,px(44),8);
    technical.setVisibility(View.GONE);block(body,technical,-2,5);
    detailToggle.setOnClickListener(v->{boolean opening=technical.getVisibility()!=View.VISIBLE;
@@ -698,6 +699,17 @@ public class ModernActivity extends MainActivity {
    String telemetry=c.getString(c.getColumnIndexOrThrow("telemetry"));
    try{JSONArray samples=new JSONArray(telemetry==null?"[]":telemetry);
     block(technical,label(samples.length()==0?"GPS diagnostics unavailable for this older journey":"GPS diagnostics: "+samples.length()+" speed samples",13,muted),-2,9);
+     if(samples.length()>2){
+      block(body,label("SPEED THROUGHOUT JOURNEY",12,muted),-2,7);
+      float[] rawLine=new float[Math.min(120,samples.length())],filteredLine=new float[rawLine.length];
+      for(int k=0;k<rawLine.length;k++){
+       JSONArray sp=samples.optJSONArray((int)((long)k*(samples.length()-1)/Math.max(1,rawLine.length-1)));
+       rawLine[k]=sp==null?0:(float)(sp.optDouble(1,0)*3.6);
+       filteredLine[k]=sp==null?0:(float)(sp.optDouble(2,0)*3.6);
+      }
+      block(body,new JourneySpeedTimeline(this,rawLine,filteredLine),px(180),10);
+      block(body,label("Aqua: GPS speed · Blue: displayed speed · start to finish",11,muted),-2,10);
+     }
    }catch(Exception ignored){}
    LinearLayout exports=new LinearLayout(this);
    for(String kind:new String[]{"GPX","CSV","JSON"}){
@@ -927,6 +939,22 @@ public class ModernActivity extends MainActivity {
   long seconds=Math.max(0,ms/1000);
   return seconds>=3600?String.format(Locale.getDefault(),"%d:%02d:%02d",seconds/3600,(seconds/60)%60,seconds%60)
    :String.format(Locale.getDefault(),"%02d:%02d",seconds/60,seconds%60);
+ }
+ class JourneySpeedTimeline extends View {
+  final float[] raw,filtered;final Paint pen=new Paint(3);
+  JourneySpeedTimeline(Context c,float[] r,float[] f){super(c);raw=r;filtered=f;setBackground(round(0xff182c39,15));}
+  @Override protected void onDraw(Canvas canvas){
+   super.onDraw(canvas);if(raw.length<2)return;
+   float left=px(16),right=getWidth()-px(16),top=px(18),bottom=getHeight()-px(25),max=20;
+   for(float v:raw)max=Math.max(max,v);for(float v:filtered)max=Math.max(max,v);
+   for(int grid=0;grid<=3;grid++){float y=bottom-(bottom-top)*grid/3f;pen.setColor(0xff344b5b);pen.setStrokeWidth(px(1));canvas.drawLine(left,y,right,y,pen);}
+   for(int series=0;series<2;series++){
+    float[] values=series==0?raw:filtered;Path path=new Path();
+    for(int i=0;i<values.length;i++){float x=left+(right-left)*i/(values.length-1f),y=bottom-(bottom-top)*values[i]/max;if(i==0)path.moveTo(x,y);else path.lineTo(x,y);}
+    pen.setColor(series==0?0xff09ded0:0xff66a9ef);pen.setStyle(Paint.Style.STROKE);pen.setStrokeWidth(px(2));canvas.drawPath(path,pen);pen.setStyle(Paint.Style.FILL);
+   }
+   pen.setColor(0xffa9c4d1);pen.setTextSize(px(11));pen.setTextAlign(Paint.Align.LEFT);canvas.drawText("Start",left,bottom+px(17),pen);pen.setTextAlign(Paint.Align.RIGHT);canvas.drawText("End",right,bottom+px(17),pen);
+  }
  }
  class SpeedChart extends View{
   final float[] values;final Paint p=new Paint(3);final boolean distribution;
