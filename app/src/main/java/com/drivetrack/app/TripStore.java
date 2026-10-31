@@ -10,6 +10,8 @@ public class TripStore extends SQLiteOpenHelper {
  public org.json.JSONObject exportAll() throws org.json.JSONException {
   org.json.JSONObject root=new org.json.JSONObject();
   root.put("format","DriveTrack JSON");root.put("version",2);
+  root.put("app_version",com.drivetrack.app.BuildConfig.VERSION_NAME);
+  root.put("exported_at",System.currentTimeMillis());
   root.put("units","metres,metres_per_second,unix_milliseconds");
   org.json.JSONArray journeys=new org.json.JSONArray();
   try(android.database.Cursor c=all()){
@@ -40,7 +42,20 @@ public class TripStore extends SQLiteOpenHelper {
    try(SQLiteDatabase source=SQLiteDatabase.openDatabase(tmp.getAbsolutePath(),null,SQLiteDatabase.OPEN_READONLY);
        Cursor verify=source.rawQuery("PRAGMA integrity_check",null)){
     if(!verify.moveToFirst()||!"ok".equalsIgnoreCase(verify.getString(0)))throw new java.io.IOException("SQLite backup failed integrity check");
-    try(Cursor rows=source.rawQuery("SELECT started,ended,distance,maxspeed,movingms,pausedms,points FROM trips ORDER BY started",null)){
+    int telemetryColumn=-1,titleColumn=-1,notesColumn=-1;
+    try(Cursor columns=source.rawQuery("PRAGMA table_info(trips)",null)){
+     while(columns.moveToNext()){
+      String col=columns.getString(1);
+      if("telemetry".equals(col))telemetryColumn=1;
+      if("title".equals(col))titleColumn=1;
+      if("notes".equals(col))notesColumn=1;
+     }
+    }
+    String select="SELECT started,ended,distance,maxspeed,movingms,pausedms,points"+
+      (telemetryColumn>=0?",telemetry":" ,NULL AS telemetry")+
+      (titleColumn>=0?",title":" ,NULL AS title")+
+      (notesColumn>=0?",notes":" ,NULL AS notes")+" FROM trips ORDER BY started";
+    try(Cursor rows=source.rawQuery(select,null)){
      SQLiteDatabase destination=getWritableDatabase();
      destination.beginTransaction();
      try {
@@ -56,7 +71,11 @@ public class TripStore extends SQLiteOpenHelper {
        v.put("started",start);v.put("ended",end);
        v.put("distance",rows.getDouble(2));v.put("maxspeed",rows.getDouble(3));
        v.put("movingms",rows.getLong(4));v.put("pausedms",rows.getLong(5));
-       v.put("points",pts);v.put("telemetry","[]");
+       v.put("points",pts);
+       String telemetry=rows.getString(7);
+       new org.json.JSONArray(telemetry==null?"[]":telemetry);
+       v.put("telemetry",telemetry==null?"[]":telemetry);
+       v.put("title",rows.getString(8));v.put("notes",rows.getString(9));
        if(destination.insertOrThrow("trips",null,v)>0)imported++;
       }
       destination.setTransactionSuccessful();
