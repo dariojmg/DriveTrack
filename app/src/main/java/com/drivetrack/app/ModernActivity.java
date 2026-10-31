@@ -239,7 +239,7 @@ public class ModernActivity extends MainActivity {
   }
   LinearLayout signal=new LinearLayout(this);signal.setPadding(px(14),px(8),px(14),px(8));signal.setGravity(Gravity.CENTER_VERTICAL);
   signal.setBackground(round(surface,16));
-  signal.addView(label("◉   GPS STATUS",11,muted),new LinearLayout.LayoutParams(0,-2,1));
+  signal.addView(label("◉   GPS · LIVE",11,muted),new LinearLayout.LayoutParams(0,-2,1));
   gpsValue=label("Acquiring signal",12,accent);signal.addView(gpsValue);
   block(body,signal,px(40),5);
   // Two explicit view choices, separate from GPS status.
@@ -464,12 +464,12 @@ public class ModernActivity extends MainActivity {
  @Override void updateDashboard(){
   updateScreenAwake();
   if(screen==0){
-   if(gpsValue!=null)gpsValue.setText(TrackingService.active&&!TrackingService.gpsIssue.isEmpty()?TrackingService.gpsIssue:!TrackingService.active?"○ Waiting for GPS":TrackingService.paused?"Ⅱ Paused":TrackingService.lastFixTime>0&&System.currentTimeMillis()-TrackingService.lastFixTime>8000?"○ Signal lost":TrackingService.accuracy<=10&&TrackingService.lastFixTime>0?"● Strong · ±"+(int)TrackingService.accuracy+" m":TrackingService.accuracy<=25&&TrackingService.lastFixTime>0?"● Fair · ±"+(int)TrackingService.accuracy+" m":TrackingService.lastFixTime>0?"○ Poor · ±"+(int)TrackingService.accuracy+" m":"○ Acquiring · "+insightDuration(System.currentTimeMillis()-TrackingService.started));
+   if(gpsValue!=null){long age=TrackingService.lastAcceptedFixAgeMs();gpsValue.setText(!TrackingService.active?"○ Waiting for GPS":TrackingService.paused?"Ⅱ Paused":!TrackingService.gpsIssue.isEmpty()?TrackingService.gpsIssue:age<0?"○ Acquiring GPS":age>3500?"○ GPS outdated · "+(age/1000)+"s":TrackingService.accuracy<=10?"● Strong · ±"+(int)TrackingService.accuracy+"m":TrackingService.accuracy<=25?"● Fair · ±"+(int)TrackingService.accuracy+"m":"○ Weak · ±"+(int)TrackingService.accuracy+"m");}
    if(distanceValue!=null)distanceValue.setText(dist(TrackingService.distance));
    if(driveTimeValue!=null)driveTimeValue.setText(TrackingService.active?duration(TrackingService.elapsedActiveMs()):"00:00");
    if(currentLocationValue!=null){updatePlaceDisplay();updatePlaceName();}
    if(gauge!=null)gauge.invalidate();
-   if(mapModeSpeed!=null)mapModeSpeed.setText(Math.round(TrackingService.currentSpeed*(miles?2.236936:3.6))+(miles?" mph":" km/h"));
+   if(mapModeSpeed!=null)mapModeSpeed.setText(Math.round(TrackingService.visibleSpeed()*(miles?2.236936:3.6))+(miles?" mph":" km/h"));
    if(mapPending!=null){
     boolean fix=TrackingService.lastFixTime>0&&System.currentTimeMillis()-TrackingService.lastFixTime<12000;
     mapPending.setVisibility(fix?View.GONE:View.VISIBLE);
@@ -477,8 +477,8 @@ public class ModernActivity extends MainActivity {
       "GPS signal lost · Waiting for accurate coordinates":
       "Recording time "+insightDuration(System.currentTimeMillis()-TrackingService.started)+" · Waiting for first GPS fix (distance starts with GPS)");
    }
-   if(liveMap!=null&&TrackingService.active&&TrackingService.lastFixTime>0)updateLiveMap();
-  }else if(screen==4&&digitalSpeed!=null)digitalSpeed.setText(String.valueOf(Math.round(TrackingService.currentSpeed*(miles?2.236936:3.6))));
+   if(liveMap!=null&&TrackingService.active&&TrackingService.lastAcceptedFixAgeMs()>=0&&TrackingService.lastAcceptedFixAgeMs()<3500)updateLiveMap();
+  }else if(screen==4&&digitalSpeed!=null)digitalSpeed.setText(String.valueOf(Math.round(TrackingService.visibleSpeed()*(miles?2.236936:3.6))));
  }
  void updateLiveMap(){
   try{
@@ -487,7 +487,7 @@ public class ModernActivity extends MainActivity {
    JSONArray latest=pts.getJSONArray(pts.length()-1);
    double lat=latest.getDouble(0),lon=latest.getDouble(1);
    if(Math.abs(lat)>90||Math.abs(lon)>180)return;
-   liveMap.evaluateJavascript("if(window.showRoute)window.showRoute("+pts.toString()+","+TrackingService.currentSpeed+");",null);
+   liveMap.evaluateJavascript("if(window.showRoute)window.showRoute("+pts.toString()+","+TrackingService.visibleSpeed()+");",null);
   }catch(Exception ignored){}
  }
  void openLiveMap(){
@@ -855,7 +855,7 @@ public class ModernActivity extends MainActivity {
   replayMap.loadDataWithBaseURL("https://appassets.androidplatform.net/",html,"text/html","UTF-8",null);
 
   LinearLayout telemetryCards=new LinearLayout(this);
-  String[] headings={"TIME","SPEED","ELAPSED"};
+  String[] headings={"CLOCK","GPS SPEED","ELAPSED"};
   TextView[] values=new TextView[3];
   for(int i=0;i<3;i++){
    LinearLayout card=vertical();card.setPadding(px(8),px(11),px(8),px(10));
@@ -1031,7 +1031,7 @@ public class ModernActivity extends MainActivity {
   sectionLabel(body,"DATA & BACKUP");
   Button export=button("Export all journeys to JSON",surface);block(body,export,px(52),10);export.setOnClickListener(v->exportJourneys());
   Button restore=button("Restore journeys from .db backup",surface);block(body,restore,px(52),12);restore.setOnClickListener(v->importJourneys());
-  block(body,label("GPS readings and journey history are stored on-device. Online maps load OpenStreetMap tiles. Exported files may contain precise locations.",13,muted),-2,18);
+  block(body,label("Build "+BuildConfig.VERSION_NAME+" · GPS signal age is monitored. Export before changing phones. Backup files may contain precise locations.",13,muted),-2,18);
   sectionLabel(body,"DATA MANAGEMENT");
   Button cleanup=button("Remove accidental zero-distance entries",surface);block(body,cleanup,px(50),10);
   cleanup.setOnClickListener(v->{
@@ -1077,6 +1077,9 @@ public class ModernActivity extends MainActivity {
     for(int i=0;i<pts.length();i++){JSONArray p=pts.getJSONArray(i);s.append(i).append(',').append(p.getDouble(0)).append(',').append(p.getDouble(1)).append('\n');}
    }else{
     JSONObject trip=new JSONObject();
+     trip.put("app_version",BuildConfig.VERSION_NAME);
+     trip.put("exported_at",System.currentTimeMillis());
+     trip.put("speed_sample_format","timestamp_ms,raw_mps,display_mps,horizontal_accuracy_m,speed_accuracy_mps,filter_mode");
     trip.put("started",c.getLong(c.getColumnIndexOrThrow("started")));trip.put("ended",c.getLong(c.getColumnIndexOrThrow("ended")));
     trip.put("distance_metres",c.getDouble(c.getColumnIndexOrThrow("distance")));
     trip.put("max_speed_metres_per_second",c.getDouble(c.getColumnIndexOrThrow("maxspeed")));
