@@ -464,7 +464,7 @@ public class ModernActivity extends MainActivity {
  @Override void updateDashboard(){
   updateScreenAwake();
   if(screen==0){
-   if(gpsValue!=null){long age=TrackingService.lastAcceptedFixAgeMs();gpsValue.setText(!TrackingService.active?"○ Waiting for GPS":TrackingService.paused?"Ⅱ Paused":!TrackingService.gpsIssue.isEmpty()?TrackingService.gpsIssue:age<0?"○ Acquiring GPS":age>3500?"○ GPS outdated · "+(age/1000)+"s":TrackingService.accuracy<=10?"● Strong · ±"+(int)TrackingService.accuracy+"m":TrackingService.accuracy<=25?"● Fair · ±"+(int)TrackingService.accuracy+"m":"○ Weak · ±"+(int)TrackingService.accuracy+"m");}
+   if(gpsValue!=null){long age=TrackingService.lastAcceptedFixAgeMs();gpsValue.setText(!TrackingService.active?"○ Waiting for GPS":TrackingService.paused?"Ⅱ Paused":!TrackingService.gpsIssue.isEmpty()?TrackingService.gpsIssue:!TrackingService.gpsConfidenceNote.isEmpty()?"◌ "+TrackingService.gpsConfidenceNote:age<0?"○ Acquiring GPS":age>3500?"○ GPS outdated · "+(age/1000)+"s":TrackingService.accuracy<=10?"● Strong · ±"+(int)TrackingService.accuracy+"m":TrackingService.accuracy<=25?"● Fair · ±"+(int)TrackingService.accuracy+"m":"○ Weak · ±"+(int)TrackingService.accuracy+"m");}
    if(distanceValue!=null)distanceValue.setText(dist(TrackingService.distance));
    if(driveTimeValue!=null)driveTimeValue.setText(TrackingService.active?duration(TrackingService.elapsedActiveMs()):"00:00");
    if(currentLocationValue!=null){updatePlaceDisplay();updatePlaceName();}
