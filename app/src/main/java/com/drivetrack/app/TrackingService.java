@@ -12,6 +12,11 @@ public class TrackingService extends Service implements LocationListener {
  public static String filterMode="waiting";
  public static String gpsConfidenceNote="";
  private int questionableLowSpeedSamples=0;
+ private int speedMismatchSamples=0;
+ private Location positionAnchor=null;
+ private long positionAnchorAt=0;
+ public static double positionSpeed=Double.NaN;
+ public static int speedMismatchEvents=0;
  public static long lastAcceptedFixAgeMs(){return lastFixTime<=0?-1:System.currentTimeMillis()-lastFixTime;}
  public static double visibleSpeed(){return active&&!paused&&lastFixTime>0&&lastAcceptedFixAgeMs()<3500?currentSpeed:0;}
  public static float accuracy=0;
@@ -26,17 +31,17 @@ public class TrackingService extends Service implements LocationListener {
   if(i!=null&&"STOP".equals(i.getAction())){finish();stopForeground(STOP_FOREGROUND_REMOVE);stopSelf();return START_NOT_STICKY;}
   String action=i==null?null:i.getAction();
   if("PAUSE".equals(action)&&active&&!paused){
-   paused=true;pausedAt=System.currentTimeMillis();currentSpeed=0;filterMode="paused";last=null;lastAt=0;previousValidSpeed=-1;
+   paused=true;pausedAt=System.currentTimeMillis();currentSpeed=0;filterMode="paused";last=null;lastAt=0;previousValidSpeed=-1;positionAnchor=null;positionAnchorAt=0;speedMismatchSamples=0;
    try{lm.removeUpdates(this);}catch(Exception ignored){}
    updateNotification();sendBroadcast(new Intent(UPDATE).setPackage(getPackageName()));return START_STICKY;
   }
   if("RESUME".equals(action)&&active&&paused){
-   pausedMs+=System.currentTimeMillis()-pausedAt;paused=false;pausedAt=0;currentSpeed=0;previousValidSpeed=-1;filterMode="acquiring";last=null;lastAt=0;
+   pausedMs+=System.currentTimeMillis()-pausedAt;paused=false;pausedAt=0;currentSpeed=0;previousValidSpeed=-1;filterMode="acquiring";last=null;lastAt=0;positionAnchor=null;positionAnchorAt=0;speedMismatchSamples=0;
    updateNotification();
    try{lm.requestLocationUpdates(LocationManager.GPS_PROVIDER,1000,0,this);}catch(SecurityException ignored){}
    sendBroadcast(new Intent(UPDATE).setPackage(getPackageName()));return START_STICKY;
   }
-  if(!active){started=System.currentTimeMillis();movingMs=0;pausedMs=0;pausedAt=0;paused=false;distance=0;maxSpeed=0;currentSpeed=0;rejectedFixes=0;lastFixTime=0;points=new JSONArray();telemetry=new JSONArray();last=null;lastAt=0;previousValidSpeed=-1;lastRawSpeed=0;speedAccuracy=Float.NaN;filterMode="acquiring";gpsConfidenceNote="";questionableLowSpeedSamples=0;active=true;getSharedPreferences("recovery",0).edit().putLong("started",started).apply();}
+  if(!active){started=System.currentTimeMillis();movingMs=0;pausedMs=0;pausedAt=0;paused=false;distance=0;maxSpeed=0;currentSpeed=0;rejectedFixes=0;lastFixTime=0;points=new JSONArray();telemetry=new JSONArray();last=null;lastAt=0;previousValidSpeed=-1;lastRawSpeed=0;speedAccuracy=Float.NaN;filterMode="acquiring";gpsConfidenceNote="";questionableLowSpeedSamples=0;speedMismatchSamples=0;positionAnchor=null;positionAnchorAt=0;positionSpeed=Double.NaN;speedMismatchEvents=0;active=true;getSharedPreferences("recovery",0).edit().putLong("started",started).apply();}
   updateNotification();
   gpsIssue="";
   try{
@@ -75,6 +80,21 @@ public class TrackingService extends Service implements LocationListener {
     distance+=d;if(speed>0.8)movingMs+=dt;
    }
   }
+  // Compare reported GNSS speed with displacement over a wider interval, not
+  // single-second position jitter. Both values are GPS-derived, so disagreement
+  // marks uncertainty; it must never fabricate a replacement vehicle speed.
+  if(positionAnchor==null){positionAnchor=new Location(p);positionAnchorAt=now;}
+  else if(now-positionAnchorAt>=4000){
+   double windowSeconds=(now-positionAnchorAt)/1000.0;
+   positionSpeed=positionAnchor.distanceTo(p)/windowSeconds;
+   double tolerance=Math.max(3.0,(positionAnchor.getAccuracy()+accuracy)/windowSeconds);
+   boolean plausible=windowSeconds<=9&&accuracy<=20&&positionAnchor.getAccuracy()<=20;
+   if(plausible&&Math.abs(positionSpeed-rawSpeed)>tolerance&&
+      (positionSpeed>=4.0||rawSpeed>=4.0))speedMismatchSamples++;
+   else speedMismatchSamples=Math.max(0,speedMismatchSamples-1);
+   if(speedMismatchSamples==2)speedMismatchEvents++;
+   positionAnchor=new Location(p);positionAnchorAt=now;
+  }
   // Adaptive smoothing: quick response to real acceleration/braking, calm at steady speed.
   // Time-aware alpha keeps behaviour consistent when GPS callbacks are irregular.
   if(previousValidSpeed<0){currentSpeed=speed;filterMode="new fix";}
@@ -94,14 +114,17 @@ public class TrackingService extends Service implements LocationListener {
   // especially around roundabouts. Never invent speed or distance: surface uncertainty.
   if(speed>0.4&&speed<2.3&&accuracy>=7.0f)questionableLowSpeedSamples++;
   else questionableLowSpeedSamples=0;
-  gpsConfidenceNote=questionableLowSpeedSamples>=5?"GPS speed uncertain · check vehicle speed":"";
-  if(questionableLowSpeedSamples>=5)filterMode="low-speed-uncertain";
+  boolean suspicious=questionableLowSpeedSamples>=5||speedMismatchSamples>=2;
+  gpsConfidenceNote=suspicious?"GPS speed uncertain · check vehicle speed":"";
+  if(suspicious)filterMode=speedMismatchSamples>=2?"speed-position-mismatch":"low-speed-uncertain";
   lastRawSpeed=rawSpeed;previousValidSpeed=speed;maxSpeed=Math.max(maxSpeed,speed);
   try{org.json.JSONArray sample=new org.json.JSONArray();
    sample.put(System.currentTimeMillis());sample.put(Math.round(rawSpeed*100.0)/100.0);
    sample.put(Math.round(currentSpeed*100.0)/100.0);sample.put(accuracy);
    sample.put(Float.isNaN(speedAccuracy)?JSONObject.NULL:Math.round(speedAccuracy*100.0)/100.0);
    sample.put(filterMode);
+   sample.put(Double.isNaN(positionSpeed)?JSONObject.NULL:Math.round(positionSpeed*100.0)/100.0);
+   sample.put(speedMismatchSamples);
    telemetry.put(sample);
   }catch(Exception ignored){}
   last=p;lastAt=now;lastFixTime=System.currentTimeMillis();
@@ -119,7 +142,7 @@ public class TrackingService extends Service implements LocationListener {
   if(distance>=20&&points.length()>=3)
    new TripStore(this).save(started,System.currentTimeMillis(),distance,maxSpeed,movingMs,pausedMs,points.toString(),telemetry.toString());
   getSharedPreferences("recovery",0).edit().clear().apply();
-  distance=0;maxSpeed=0;currentSpeed=0;movingMs=0;accuracy=0;locationText="Waiting for GPS";lastFixTime=0;lastRawSpeed=0;speedAccuracy=Float.NaN;filterMode="waiting";gpsConfidenceNote="";questionableLowSpeedSamples=0;points=new JSONArray();telemetry=new JSONArray();last=null;lastAt=0;
+  distance=0;maxSpeed=0;currentSpeed=0;movingMs=0;accuracy=0;locationText="Waiting for GPS";lastFixTime=0;lastRawSpeed=0;speedAccuracy=Float.NaN;filterMode="waiting";gpsConfidenceNote="";questionableLowSpeedSamples=0;speedMismatchSamples=0;positionAnchor=null;positionAnchorAt=0;positionSpeed=Double.NaN;points=new JSONArray();telemetry=new JSONArray();last=null;lastAt=0;
   sendBroadcast(new Intent(UPDATE).setPackage(getPackageName()));
  }
  public void onDestroy(){if(active)try{lm.removeUpdates(this);}catch(Exception ignored){}super.onDestroy();}
