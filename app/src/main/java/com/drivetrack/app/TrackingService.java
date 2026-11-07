@@ -25,6 +25,12 @@ public class TrackingService extends Service implements LocationListener {
  public static String locationText="Waiting for GPS";
  public static String gpsIssue="";
  public static JSONArray points=new JSONArray(),telemetry=new JSONArray();
+ // Pause events stay alongside GPS telemetry without changing the journey database schema.
+ // Format: ["pause", start_timestamp_ms, end_timestamp_ms].
+ private static void recordPause(long from,long to){
+  if(from<=0||to<from)return;
+  JSONArray event=new JSONArray();event.put("pause");event.put(from);event.put(to);telemetry.put(event);
+ }
  private LocationManager lm;private Location last;private long lastAt=0;private double previousValidSpeed=-1;
  public void onCreate(){super.onCreate();lm=(LocationManager)getSystemService(LOCATION_SERVICE);NotificationChannel ch=new NotificationChannel("journey","Journey tracking",NotificationManager.IMPORTANCE_LOW);((NotificationManager)getSystemService(NOTIFICATION_SERVICE)).createNotificationChannel(ch);}
  public int onStartCommand(Intent i,int flags,int id){
@@ -36,7 +42,8 @@ public class TrackingService extends Service implements LocationListener {
    updateNotification();sendBroadcast(new Intent(UPDATE).setPackage(getPackageName()));return START_STICKY;
   }
   if("RESUME".equals(action)&&active&&paused){
-   pausedMs+=System.currentTimeMillis()-pausedAt;paused=false;pausedAt=0;currentSpeed=0;previousValidSpeed=-1;filterMode="acquiring";last=null;lastAt=0;positionAnchor=null;positionAnchorAt=0;speedMismatchSamples=0;
+   long resumedAt=System.currentTimeMillis();recordPause(pausedAt,resumedAt);
+   pausedMs+=resumedAt-pausedAt;paused=false;pausedAt=0;currentSpeed=0;previousValidSpeed=-1;filterMode="acquiring";last=null;lastAt=0;positionAnchor=null;positionAnchorAt=0;speedMismatchSamples=0;
    updateNotification();
    try{lm.requestLocationUpdates(LocationManager.GPS_PROVIDER,1000,0,this);}catch(SecurityException ignored){}
    sendBroadcast(new Intent(UPDATE).setPackage(getPackageName()));return START_STICKY;
@@ -135,7 +142,7 @@ public class TrackingService extends Service implements LocationListener {
  }
  private void finish(){
   if(!active)return;
-  if(paused){pausedMs+=System.currentTimeMillis()-pausedAt;paused=false;pausedAt=0;}
+  if(paused){long stopAt=System.currentTimeMillis();recordPause(pausedAt,stopAt);pausedMs+=stopAt-pausedAt;paused=false;pausedAt=0;}
   active=false;currentSpeed=0;
   try{lm.removeUpdates(this);}catch(Exception ignored){}
   // Ignore accidental taps and journeys without meaningful GPS distance.
