@@ -520,40 +520,49 @@ public class ModernActivity extends MainActivity {
   handler.postDelayed(new Runnable(){public void run(){if(screen==4){updateDashboard();handler.postDelayed(this,1000);}}},1000);
  }
  static class GpsReport {
-  boolean available=false;int count=0;double median=Double.NaN;long fixDelay=0,maxGap=0;String status="No GPS samples";
-  String detail="Older journey: detailed GPS accuracy information is unavailable.";
+  boolean available=false;double median=Double.NaN;int count=0;long firstFix=0,signalGap=0,pauseGap=0,tail=0;String status="No GPS samples",detail="No GPS diagnostics available.";
  }
- GpsReport gpsReport(long started,String serialized){
-  GpsReport report=new GpsReport();
+ static ArrayList<long[]> pauseIntervals(JSONArray samples,long pauseMs){
+  ArrayList<long[]> ranges=new ArrayList<>();long last=0,longest=0,from=0,to=0;
+  for(int i=0;i<samples.length();i++){JSONArray row=samples.optJSONArray(i);if(row==null)continue;
+   if("pause".equals(row.optString(0,""))){long p=row.optLong(1,0),q=row.optLong(2,0);if(p>0&&q>=p)ranges.add(new long[]{p,q,1});continue;}
+   long t=row.optLong(0,0);if(t<=0)continue;if(last>0&&t-last>longest){longest=t-last;from=last;to=t;}last=t;
+  }
+  if(ranges.isEmpty()&&pauseMs>30000&&longest>=30000&&Math.abs(longest-pauseMs)<=Math.max(15000,pauseMs/15))
+   ranges.add(new long[]{from,to,0});
+  return ranges;
+ }
+ static long overlap(long a,long b,ArrayList<long[]> pauses){
+  long result=0;for(long[] p:pauses)result+=Math.max(0,Math.min(b,p[1])-Math.max(a,p[0]));
+  return Math.min(Math.max(0,b-a),result);
+ }
+ GpsReport gpsReport(long started,long ended,long pausedMs,String serialized){
+  GpsReport r=new GpsReport();
   try{
    JSONArray samples=new JSONArray(serialized==null?"[]":serialized);
-   ArrayList<Double> accuracies=new ArrayList<>();
-   long first=0,previous=0;
-   for(int i=0;i<samples.length();i++){
-    JSONArray sample=samples.optJSONArray(i);if(sample==null||sample.length()<4)continue;
-    long t=sample.optLong(0,0);double accuracy=sample.optDouble(3,Double.NaN);
-    if(t<=0||Double.isNaN(accuracy)||accuracy<0)continue;
+   ArrayList<long[]> pauses=pauseIntervals(samples,pausedMs);
+   ArrayList<Double> accuracyList=new ArrayList<>();long first=0,prev=0;
+   for(int i=0;i<samples.length();i++){JSONArray row=samples.optJSONArray(i);if(row==null||row.length()<4||"pause".equals(row.optString(0,"")))continue;
+    long t=row.optLong(0,0);double acc=row.optDouble(3,Double.NaN);if(t<=0||Double.isNaN(acc)||acc<0)continue;
     if(first==0)first=t;
-    if(previous>0&&t>previous)report.maxGap=Math.max(report.maxGap,t-previous);
-    previous=t;accuracies.add(accuracy);
+    if(prev>0&&t>prev){long gap=t-prev,p=overlap(prev,t,pauses);r.signalGap=Math.max(r.signalGap,gap-p);r.pauseGap=Math.max(r.pauseGap,p);}
+    prev=t;accuracyList.add(acc);
    }
-   if(accuracies.size()<2)return report;
-   report.available=true;report.count=accuracies.size();
-   Collections.sort(accuracies);
-   report.median=accuracies.get(accuracies.size()/2);
-   report.fixDelay=Math.max(0,first-started);
-   boolean warn=report.median>15||report.maxGap>10000||report.fixDelay>30000;
-   report.status=warn?"GPS: Review":"GPS: Good";
-   StringBuilder details=new StringBuilder();
-   details.append("Median reported accuracy: ").append(String.format(Locale.getDefault(),"%.1f m",report.median));
-   details.append("  ·  First fix: ").append(insightDuration(report.fixDelay));
-   details.append("  ·  Longest gap: ").append(String.format(Locale.getDefault(),"%.1f s",report.maxGap/1000d));
-   if(report.maxGap>=5000)details.append("\nGPS interruption recorded (possible tunnel or underground parking). Missing positions are not estimated.");
-    if(warn)details.append("\nReview advised: delayed acquisition, signal gaps or lower accuracy. These do not necessarily mean the recorded distance is wrong.");
-   else details.append("\nNo major GPS reception warning detected.");
-   report.detail=details.toString();
-  }catch(Exception ignored){}
-  return report;
+   if(accuracyList.size()<2)return r;
+   r.available=true;r.count=accuracyList.size();Collections.sort(accuracyList);r.median=accuracyList.get(accuracyList.size()/2);
+   r.firstFix=Math.max(0,first-started);r.tail=Math.max(0,ended-prev-overlap(prev,ended,pauses));
+   r.signalGap=Math.max(r.signalGap,r.tail);
+   boolean warn=r.median>15||r.signalGap>10000||r.firstFix>30000;r.status=warn?"GPS: Review":"GPS: Good";
+   StringBuilder d=new StringBuilder();
+   d.append("Median accuracy: ").append(String.format(Locale.getDefault(),"%.1f m",r.median));
+   d.append(" · First fix: ").append(insightDuration(r.firstFix));
+   d.append("\nLongest GPS gap excluding pauses: ").append(insightDuration(r.signalGap));
+   if(r.pauseGap>0)d.append("\nRecording paused: ").append(insightDuration(r.pauseGap)).append(!pauses.isEmpty()&&pauses.get(0)[2]==0?" (estimated for older journey)":" (recorded)");
+   if(r.tail>5000)d.append("\nGPS unavailable near journey end: ").append(insightDuration(r.tail)).append(" · cause unknown");
+   if(r.signalGap>5000)d.append("\nMissing GPS positions cannot be reconstructed.");
+   if(warn)d.append("\nReview advised: GPS gaps, slow fix or reduced accuracy.");else d.append("\nNo major GPS reception warning.");
+   r.detail=d.toString();
+  }catch(Exception ignored){}return r;
  }
  @Override void showHistory(){
   screen=1;init("History");headerSmall(body,"Your journeys","All your drives, organised by date");
@@ -610,7 +619,7 @@ public class ModernActivity extends MainActivity {
      block(info,heading,-2,2);
      block(info,label(date(start)+"   ·   "+duration(time),11,muted),-2,7);
      TextView figures=label(dis+"   ·   "+speed(max)+" max",13,accent);figures.setTypeface(null,1);block(info,figures,-2,2);
-     GpsReport report=gpsReport(start,c.getString(c.getColumnIndexOrThrow("telemetry")));
+     GpsReport report=gpsReport(start,c.getLong(c.getColumnIndexOrThrow("ended")),c.getLong(c.getColumnIndexOrThrow("pausedms")),c.getString(c.getColumnIndexOrThrow("telemetry")));
      block(info,label(report.status,10,report.available?(report.status.contains("Review")?0xffffbc79:0xff82dacd):muted),-2,0);
      block(entries,card,px(104),8);
      card.setOnClickListener(v->showDetail(id));
@@ -657,7 +666,7 @@ public class ModernActivity extends MainActivity {
    String notes=c.getString(c.getColumnIndexOrThrow("notes"));if(notes==null)notes="";
    final String origTitle=tripTitle,origNotes=notes;
    headerSmall(body,tripTitle,date(started));
-   GpsReport gps=gpsReport(started,c.getString(c.getColumnIndexOrThrow("telemetry")));
+   GpsReport gps=gpsReport(started,ended,pause,c.getString(c.getColumnIndexOrThrow("telemetry")));
    LinearLayout gpsCard=vertical();gpsCard.setPadding(px(14),px(11),px(14),px(11));
    gpsCard.setBackground(round(surface,14));
    TextView gpsTitle=label(gps.status,14,gps.available?(gps.status.contains("Review")?0xffffbc79:0xff82dacd):muted);
@@ -686,10 +695,11 @@ public class ModernActivity extends MainActivity {
    mapFallback.setOnClickListener(v->{mapFrame.removeAllViews();mapFrame.addView(new RouteView(this,coords),new FrameLayout.LayoutParams(-1,-1));});
    twoStats(body,"DISTANCE",dist(metres),"TOP SPEED",speed(max));
    long effective=Math.max(0,ended-started-pause);
-   twoStats(body,"DURATION",insightDuration(effective),"MOVING AVG",speed(metres/Math.max(1,moving/1000d)));
+   twoStats(body,"ACTIVE TIME",insightDuration(effective),"MOVING AVG",speed(metres/Math.max(1,moving/1000d)));
+   twoStats(body,"TOTAL ELAPSED",insightDuration(Math.max(0,ended-started)),"PAUSED",insightDuration(pause));
    LinearLayout technical=vertical();
    twoStats(technical,"OVERALL AVG",speed(metres/Math.max(1,effective/1000d)),"STOPPED",insightDuration(Math.max(0,effective-moving)));
-   twoStats(technical,"PAUSED",insightDuration(pause),"GPS POINTS",String.valueOf(coords.length()));
+   twoStats(technical,"MOVING",insightDuration(moving),"GPS POINTS",String.valueOf(coords.length()));
    Button detailToggle=button("Technical details   ⌄",surface);block(body,detailToggle,px(44),8);
    technical.setVisibility(View.GONE);block(body,technical,-2,5);
    detailToggle.setOnClickListener(v->{boolean opening=technical.getVisibility()!=View.VISIBLE;
@@ -783,7 +793,7 @@ public class ModernActivity extends MainActivity {
   try(TripStore store=new TripStore(this);Cursor row=store.all()){
    while(row.moveToNext()){
     String raw=row.getString(row.getColumnIndexOrThrow("telemetry"));if(raw==null)continue;
-    GpsReport report=gpsReport(row.getLong(row.getColumnIndexOrThrow("started")),raw);
+    GpsReport report=gpsReport(row.getLong(row.getColumnIndexOrThrow("started")),row.getLong(row.getColumnIndexOrThrow("ended")),row.getLong(row.getColumnIndexOrThrow("pausedms")),raw);
     if(!report.available)unavailableCount++;
     else if(report.status.contains("Review"))reviewCount++;
     JSONArray samples=new JSONArray(raw);if(samples.length()<2)continue;journeysWithSamples++;
