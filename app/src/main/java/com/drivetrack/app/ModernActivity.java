@@ -711,14 +711,8 @@ public class ModernActivity extends MainActivity {
     block(technical,label(samples.length()==0?"GPS diagnostics unavailable for this older journey":"GPS diagnostics: "+samples.length()+" speed samples",13,muted),-2,9);
      if(samples.length()>2){
       block(body,label("SPEED THROUGHOUT JOURNEY",12,muted),-2,7);
-      float[] rawLine=new float[Math.min(120,samples.length())],filteredLine=new float[rawLine.length];
-      for(int k=0;k<rawLine.length;k++){
-       JSONArray sp=samples.optJSONArray((int)((long)k*(samples.length()-1)/Math.max(1,rawLine.length-1)));
-       rawLine[k]=sp==null?0:(float)(sp.optDouble(1,0)*3.6);
-       filteredLine[k]=sp==null?0:(float)(sp.optDouble(2,0)*3.6);
-      }
-      block(body,new JourneySpeedTimeline(this,rawLine,filteredLine),px(180),10);
-      block(body,label("Aqua: GPS speed · Blue: displayed speed · start to finish",11,muted),-2,10);
+      block(body,new JourneySpeedTimeline(this,samples,started,ended,pause),px(218),10);
+      block(body,label("Aqua: GPS · Blue: displayed · Orange: paused · Line breaks: GPS unavailable",11,muted),-2,10);
      }
    }catch(Exception ignored){}
    LinearLayout exports=new LinearLayout(this);
@@ -951,19 +945,58 @@ public class ModernActivity extends MainActivity {
    :String.format(Locale.getDefault(),"%02d:%02d",seconds/60,seconds%60);
  }
  class JourneySpeedTimeline extends View {
-  final float[] raw,filtered;final Paint pen=new Paint(3);
-  JourneySpeedTimeline(Context c,float[] r,float[] f){super(c);raw=r;filtered=f;setBackground(round(0xff182c39,15));}
-  @Override protected void onDraw(Canvas canvas){
-   super.onDraw(canvas);if(raw.length<2)return;
-   float left=px(16),right=getWidth()-px(16),top=px(18),bottom=getHeight()-px(25),max=20;
-   for(float v:raw)max=Math.max(max,v);for(float v:filtered)max=Math.max(max,v);
-   for(int grid=0;grid<=3;grid++){float y=bottom-(bottom-top)*grid/3f;pen.setColor(0xff344b5b);pen.setStrokeWidth(px(1));canvas.drawLine(left,y,right,y,pen);}
-   for(int series=0;series<2;series++){
-    float[] values=series==0?raw:filtered;Path path=new Path();
-    for(int i=0;i<values.length;i++){float x=left+(right-left)*i/(values.length-1f),y=bottom-(bottom-top)*values[i]/max;if(i==0)path.moveTo(x,y);else path.lineTo(x,y);}
-    pen.setColor(series==0?0xff09ded0:0xff66a9ef);pen.setStyle(Paint.Style.STROKE);pen.setStrokeWidth(px(2));canvas.drawPath(path,pen);pen.setStyle(Paint.Style.FILL);
+  final Paint pen=new Paint(3);final ArrayList<float[]> samples=new ArrayList<>();
+  final ArrayList<long[]> pauses;final long start,end;float speedMax=30;
+  JourneySpeedTimeline(Context c,JSONArray raw,long from,long to,long pauseMs){
+   super(c);start=from;end=Math.max(from+1000,to);
+   pauses=pauseIntervals(raw,pauseMs);
+   for(int i=0;i<raw.length();i++){
+    JSONArray item=raw.optJSONArray(i);if(item==null||item.length()<3||"pause".equals(item.optString(0,"")))continue;
+    long t=item.optLong(0,0);double gps=item.optDouble(1,Double.NaN),shown=item.optDouble(2,Double.NaN);
+    if(t<from||t>end||Double.isNaN(gps)||Double.isNaN(shown))continue;
+    float g=(float)(gps*3.6),v=(float)(shown*3.6);
+    samples.add(new float[]{t-start,g,v});speedMax=Math.max(speedMax,Math.max(g,v));
    }
-   pen.setColor(0xffa9c4d1);pen.setTextSize(px(11));pen.setTextAlign(Paint.Align.LEFT);canvas.drawText("Start",left,bottom+px(17),pen);pen.setTextAlign(Paint.Align.RIGHT);canvas.drawText("End",right,bottom+px(17),pen);
+   setBackground(round(0xff182c39,15));
+  }
+  @Override protected void onDraw(Canvas canvas){
+   super.onDraw(canvas);
+   float left=px(44),right=getWidth()-px(15),top=px(19),bottom=getHeight()-px(37);
+   if(right<=left||bottom<=top)return;
+   long span=end-start;
+   for(long[] r:pauses){
+    float x1=left+(right-left)*Math.max(0,r[0]-start)/(float)span;
+    float x2=left+(right-left)*Math.min(span,r[1]-start)/(float)span;
+    pen.setStyle(Paint.Style.FILL);pen.setColor(r[2]==1?0x55ffa852:0x339f947d);
+    canvas.drawRect(x1,top,x2,bottom,pen);
+   }
+   for(int i=0;i<=3;i++){
+    float y=bottom-(bottom-top)*i/3f;
+    pen.setColor(0xff395262);pen.setStrokeWidth(px(1));pen.setStyle(Paint.Style.STROKE);
+    canvas.drawLine(left,y,right,y,pen);pen.setStyle(Paint.Style.FILL);
+    pen.setColor(0xffb1c5d1);pen.setTextSize(px(11));pen.setTextAlign(Paint.Align.RIGHT);
+    canvas.drawText(""+Math.round(speedMax*i/3),left-px(6),y+px(4),pen);
+   }
+   for(int series=1;series<=2;series++){
+    Path path=new Path();float previous=-1;boolean drawing=false;
+    for(float[] sample:samples){
+     float t=sample[0],x=left+(right-left)*t/span,y=bottom-(bottom-top)*sample[series]/speedMax;
+     boolean gap=previous>=0&&t-previous>3500;
+     if(!gap&&previous>=0)for(long[] pause:pauses)if(start+previous<pause[1]&&start+t>pause[0]){gap=true;break;}
+     if(gap&&drawing){pen.setColor(series==1?0xff09ded0:0xff66a9ef);pen.setStrokeWidth(px(2));pen.setStyle(Paint.Style.STROKE);canvas.drawPath(path,pen);pen.setStyle(Paint.Style.FILL);drawing=false;}
+     if(!drawing){path=new Path();path.moveTo(x,y);drawing=true;}else path.lineTo(x,y);
+     previous=t;
+    }
+    if(drawing){pen.setColor(series==1?0xff09ded0:0xff66a9ef);pen.setStrokeWidth(px(2));pen.setStyle(Paint.Style.STROKE);canvas.drawPath(path,pen);pen.setStyle(Paint.Style.FILL);}
+   }
+   for(int i=0;i<=4;i++){
+    long seconds=Math.round((span/1000d)*i/4d);
+    String tick=seconds>=3600?seconds/3600+"h"+String.format(Locale.ROOT,"%02d",(seconds/60)%60):seconds/60+"m";
+    pen.setColor(0xffb1c5d1);pen.setTextSize(px(10));pen.setTextAlign(i==0?Paint.Align.LEFT:i==4?Paint.Align.RIGHT:Paint.Align.CENTER);
+    canvas.drawText(tick,left+(right-left)*i/4f,bottom+px(18),pen);
+   }
+   pen.setTextAlign(Paint.Align.LEFT);pen.setTextSize(px(10));pen.setColor(0xff9bb3c4);
+   canvas.drawText("km/h",px(5),px(12),pen);
   }
  }
  class SpeedChart extends View{
