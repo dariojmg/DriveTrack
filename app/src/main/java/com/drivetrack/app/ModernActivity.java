@@ -793,7 +793,7 @@ public class ModernActivity extends MainActivity {
     JSONArray samples=new JSONArray(raw);if(samples.length()<2)continue;journeysWithSamples++;
     double tripTotal=0;long tripCount=0;
     for(int i=0;i<samples.length();i++){
-     JSONArray v=samples.optJSONArray(i);if(v==null||v.length()<3)continue;
+     JSONArray v=samples.optJSONArray(i);if(v==null||v.length()<3||"pause".equals(v.optString(0,"")))continue;
      double kmh=Math.max(0,v.optDouble(2,0)*3.6);
      speedBuckets[Math.min(5,(int)(kmh/20))]++;
      combined+=kmh;samplesCount++;
