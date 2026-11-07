@@ -1151,6 +1151,9 @@ public class ModernActivity extends MainActivity {
      trip.put("app_version",BuildConfig.VERSION_NAME);
      trip.put("exported_at",System.currentTimeMillis());
      trip.put("speed_sample_format","timestamp_ms,raw_mps,display_mps,horizontal_accuracy_m,speed_accuracy_mps,filter_mode,position_speed_mps,mismatch_windows");
+      trip.put("pause_event_format","pause,start_timestamp_ms,end_timestamp_ms");
+      trip.put("paused_ms",c.getLong(c.getColumnIndexOrThrow("pausedms")));
+      trip.put("moving_ms",c.getLong(c.getColumnIndexOrThrow("movingms")));
     trip.put("started",c.getLong(c.getColumnIndexOrThrow("started")));trip.put("ended",c.getLong(c.getColumnIndexOrThrow("ended")));
     trip.put("distance_metres",c.getDouble(c.getColumnIndexOrThrow("distance")));
     trip.put("max_speed_metres_per_second",c.getDouble(c.getColumnIndexOrThrow("maxspeed")));
