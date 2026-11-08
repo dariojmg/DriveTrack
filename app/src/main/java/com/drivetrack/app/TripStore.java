@@ -100,6 +100,26 @@ public class TripStore extends SQLiteOpenHelper {
        v.put("title",rows.getString(8));v.put("notes",rows.getString(9));
        if(destination.insertOrThrow("trips",null,v)>0)imported++;
       }
+      // Restore fuel records when the source backup has the v5 fuel table.
+      boolean hasFuelTable=false;
+      try(Cursor tables=source.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name='fuel'",null)){
+       hasFuelTable=tables.moveToFirst();
+      }
+      if(hasFuelTable)try(Cursor fuel=source.rawQuery("SELECT filled_at,amount_cents,litres_milli,odometer_km,station,full_tank FROM fuel ORDER BY filled_at",null)){
+       while(fuel.moveToNext()){
+        long when=fuel.getLong(0),cents=fuel.getLong(1),millilitres=fuel.getLong(2);
+        if(when<=0||cents<=0||millilitres<=0)continue;
+        String station=fuel.getString(4);
+        String[] args={String.valueOf(when),String.valueOf(cents),String.valueOf(millilitres),station==null?"":station};
+        try(Cursor duplicate=destination.rawQuery("SELECT 1 FROM fuel WHERE filled_at=? AND amount_cents=? AND litres_milli=? AND COALESCE(station,'')=? LIMIT 1",args)){
+         if(duplicate.moveToFirst())continue;
+        }
+        ContentValues fv=new ContentValues();fv.put("filled_at",when);fv.put("amount_cents",cents);fv.put("litres_milli",millilitres);
+        if(fuel.isNull(3))fv.putNull("odometer_km");else fv.put("odometer_km",fuel.getDouble(3));
+        fv.put("station",station);fv.put("full_tank",fuel.getInt(5));
+        destination.insertOrThrow("fuel",null,fv);
+       }
+      }
       destination.setTransactionSuccessful();
      }finally{destination.endTransaction();}
     }
