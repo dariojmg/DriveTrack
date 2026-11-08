@@ -126,7 +126,7 @@ public class ModernActivity extends MainActivity {
   });
   setContentView(root);root.requestApplyInsets();
   LinearLayout header=new LinearLayout(this);header.setGravity(Gravity.CENTER_VERTICAL);header.setPadding(px(16),px(8),px(16),px(11));
-  if(!title.equals("Dashboard")&&!title.equals("History")&&!title.equals("Settings")&&!title.equals("Insights")){
+  if(!title.equals("Dashboard")&&!title.equals("History")&&!title.equals("Settings")&&!title.equals("Insights")&&!title.equals("Fuel")){
    TextView back=label("‹",32,accent);back.setGravity(Gravity.CENTER);back.setContentDescription("Back");
    header.addView(back,new LinearLayout.LayoutParams(px(48),px(48)));
    back.setOnClickListener(v->goBackFrom(title));
@@ -139,10 +139,10 @@ public class ModernActivity extends MainActivity {
   else{ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.addView(body);root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));}
   LinearLayout nav=new LinearLayout(this);nav.setPadding(px(10),px(5),px(10),px(7));
   nav.setBackgroundColor(0xff0b1b29);
-  String[] names={"◉","▤","▥","⚙"};
-  String[] titles={"Drive","Trips","Stats","Settings"};
-  int selected=title.equals("Dashboard")||title.equals("HUD")?0:title.equals("History")?1:title.equals("Insights")?2:3;
-  for(int i=0;i<4;i++){
+  String[] names={"◉","▤","▥","⛽","⚙"};
+  String[] titles={"Drive","Trips","Stats","Fuel","Settings"};
+  int selected=title.equals("Dashboard")||title.equals("HUD")?0:title.equals("History")?1:title.equals("Insights")?2:title.equals("Fuel")?3:4;
+  for(int i=0;i<5;i++){
    final int index=i;
    LinearLayout item=vertical();item.setGravity(Gravity.CENTER);
    item.setPadding(px(3),px(3),px(3),px(3));
@@ -154,10 +154,10 @@ public class ModernActivity extends MainActivity {
    LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,px(51),1);lp.setMargins(px(2),0,px(2),0);nav.addView(item,lp);
    item.setClickable(true);item.setFocusable(true);item.setContentDescription(titles[i]+" tab");
    item.setOnClickListener(v->{
-    if(index==0)showDashboard();else if(index==1)showHistory();else if(index==2)showInsights();else showSettings();
+    if(index==0)showDashboard();else if(index==1)showHistory();else if(index==2)showInsights();else if(index==3)showFuel();else showSettings();
    });
   }
-  if(title.equals("Dashboard")||title.equals("History")||title.equals("Insights")||title.equals("Settings"))root.addView(nav);
+  if(title.equals("Dashboard")||title.equals("History")||title.equals("Insights")||title.equals("Fuel")||title.equals("Settings"))root.addView(nav);
  }
  void goBackFrom(String title){
   if(title.equals("Replay"))showDetail(selectedId);
@@ -1085,6 +1085,115 @@ public class ModernActivity extends MainActivity {
  void sectionLabel(LinearLayout parent,String text){
   TextView label=label(text,11,accent);label.setTypeface(null,1);
   label.setLetterSpacing(.1f);block(parent,label,-2,9);
+ }
+
+ String euro(long cents){return String.format(Locale.getDefault(),"€%,.2f",cents/100d);}
+ String litreAmount(long milli){return String.format(Locale.getDefault(),"%.2f L",milli/1000d);}
+ EditText fuelInput(String hint,String existing,boolean number){
+  EditText v=new EditText(this);v.setSingleLine(true);v.setText(existing);v.setHint(hint);
+  v.setTextSize(17);v.setTextColor(-1);v.setHintTextColor(muted);
+  if(number)v.setInputType(android.text.InputType.TYPE_CLASS_NUMBER|android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+  v.setBackground(round(surface,12));v.setPadding(px(14),px(11),px(14),px(11));return v;
+ }
+ void fuelField(LinearLayout parent,String labelText,View input){
+  block(parent,label(labelText,12,muted),-2,5);block(parent,input,px(54),12);
+ }
+ void showFuel(){
+  screen=7;init("Fuel");headerSmall(body,"Fuel Tracker","Petrol purchases and running costs");
+  long allCents=0,allMilli=0,monthCents=0;int entries=0;
+  Calendar now=Calendar.getInstance();int year=now.get(Calendar.YEAR),month=now.get(Calendar.MONTH);
+  try(TripStore db=new TripStore(this);Cursor c=db.fuelAll()){
+   while(c.moveToNext()){
+    entries++;long cents=c.getLong(c.getColumnIndexOrThrow("amount_cents"));
+    allCents+=cents;allMilli+=c.getLong(c.getColumnIndexOrThrow("litres_milli"));
+    now.setTimeInMillis(c.getLong(c.getColumnIndexOrThrow("filled_at")));
+    if(year==now.get(Calendar.YEAR)&&month==now.get(Calendar.MONTH))monthCents+=cents;
+   }
+  }catch(Exception e){block(body,label("Fuel records unavailable: "+e.getMessage(),13,0xffffbb79),-2,8);}
+  twoStats(body,"TOTAL FUEL SPEND",euro(allCents),"THIS MONTH",euro(monthCents));
+  twoStats(body,"FUEL PURCHASED",litreAmount(allMilli),"FILL-UPS",""+entries);
+  Button add=button("＋  Add petrol fill-up",0xff087f79);block(body,add,px(58),14);
+  add.setOnClickListener(v->showFuelEntry());
+  block(body,label("Enter cost and litres to start. Odometer is optional; fuel efficiency becomes available with full-to-full readings.",12,muted),-2,17);
+  sectionLabel(body,"FILL-UP HISTORY");
+  if(entries==0)block(body,label("No petrol fill-ups recorded yet. Add your first one above.",14,muted),-2,12);
+  try(TripStore db=new TripStore(this);Cursor c=db.fuelAll()){
+   SimpleDateFormat df=new SimpleDateFormat("d MMM yyyy",Locale.getDefault());
+   while(c.moveToNext()){
+    long id=c.getLong(c.getColumnIndexOrThrow("id")),cost=c.getLong(c.getColumnIndexOrThrow("amount_cents"));
+    long litres=c.getLong(c.getColumnIndexOrThrow("litres_milli"));
+    long time=c.getLong(c.getColumnIndexOrThrow("filled_at"));
+    String station=c.getString(c.getColumnIndexOrThrow("station"));
+    boolean full=c.getInt(c.getColumnIndexOrThrow("full_tank"))==1;
+    String ode=c.isNull(c.getColumnIndexOrThrow("odometer_km"))?"":String.format(Locale.getDefault()," · %.0f km",c.getDouble(c.getColumnIndexOrThrow("odometer_km")));
+    LinearLayout card=vertical();card.setPadding(px(15),px(13),px(15),px(13));card.setBackground(round(surface,14));
+    String title=(station==null||station.trim().isEmpty()?"Petrol fill-up":station);
+    TextView heading=label(title+"     "+euro(cost),16,-1);heading.setTypeface(null,1);block(card,heading,-2,5);
+    block(card,label(df.format(new Date(time))+" · "+litreAmount(litres)+" · "+String.format(Locale.getDefault(),"€%.3f/L",cost*10d/litres),12,muted),-2,5);
+    block(card,label((full?"Full tank":"Partial fill")+ode,12,0xff91d6cf),-2,0);
+    block(body,card,-2,9);
+    card.setOnClickListener(v->new AlertDialog.Builder(this).setTitle("Delete fuel entry?")
+      .setMessage(title+" · "+df.format(new Date(time))+" · "+euro(cost)+"\n\nThis cannot be undone.")
+      .setNegativeButton("Cancel",null).setPositiveButton("Delete",(dialog,which)->{
+       try(TripStore store=new TripStore(this)){store.deleteFuel(id);}showFuel();
+      }).show());
+   }
+  }catch(Exception ignored){}
+ }
+ void showFuelEntry(){
+  screen=8;init("Fuel entry");headerSmall(body,"New fill-up","Just a few details — you can finish in seconds");
+  final Calendar chosen=Calendar.getInstance();
+  SimpleDateFormat df=new SimpleDateFormat("EEE, d MMM yyyy",Locale.getDefault());
+  Button date=button(df.format(chosen.getTime()),surface);
+  block(body,label("DATE",12,muted),-2,5);block(body,date,px(50),12);
+  date.setOnClickListener(v->new DatePickerDialog(this,(picker,y,m,d)->{
+   chosen.set(Calendar.YEAR,y);chosen.set(Calendar.MONTH,m);chosen.set(Calendar.DAY_OF_MONTH,d);
+   date.setText(df.format(chosen.getTime()));
+  },chosen.get(Calendar.YEAR),chosen.get(Calendar.MONTH),chosen.get(Calendar.DAY_OF_MONTH)).show());
+  EditText total=fuelInput("e.g. 50.00","",true),volume=fuelInput("e.g. 30.00","",true);
+  fuelField(body,"TOTAL PAID (€)",total);fuelField(body,"LITRES PURCHASED",volume);
+  TextView price=label("Price per litre will calculate automatically",13,0xff7fe7d6);block(body,price,-2,15);
+  android.text.TextWatcher watcher=new android.text.TextWatcher(){
+   public void beforeTextChanged(CharSequence s,int st,int count,int after){}
+   public void onTextChanged(CharSequence s,int st,int before,int count){
+    try{double a=Double.parseDouble(total.getText().toString()),l=Double.parseDouble(volume.getText().toString());
+     price.setText(a>0&&l>0?String.format(Locale.getDefault(),"Price per litre: €%.3f",a/l):"Enter cost and litres");}
+    catch(Exception e){price.setText("Enter cost and litres");}
+   }
+   public void afterTextChanged(android.text.Editable s){}
+  };
+  total.addTextChangedListener(watcher);volume.addTextChangedListener(watcher);
+  EditText odo=fuelInput("Optional, e.g. 125000","",true);fuelField(body,"ODOMETER (KM) · OPTIONAL",odo);
+  AutoCompleteTextView station=new AutoCompleteTextView(this);
+  station.setSingleLine(true);station.setTextSize(16);station.setTextColor(-1);station.setHintTextColor(muted);
+  station.setHint("Tesco, Circle K, Applegreen...");
+  station.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_dropdown_item_1line,new String[]{"Tesco","Circle K","Applegreen","Maxol","Inver","Emo","Texaco","Other"}));
+  station.setThreshold(1);station.setBackground(round(surface,12));station.setPadding(px(14),px(11),px(14),px(11));
+  fuelField(body,"PETROL STATION · OPTIONAL",station);
+  CheckBox full=new CheckBox(this);full.setText("Filled tank completely");full.setChecked(true);full.setTextColor(-1);
+  block(body,full,px(56),11);
+  Button save=button("Save fill-up",0xff087f79);block(body,save,px(56),10);
+  block(body,label("Entries stay on your device. Recorded fuel totals are actual purchases; driving-cost estimates require more data.",12,muted),-2,16);
+  save.setOnClickListener(v->{
+   try{
+    java.math.BigDecimal paid=new java.math.BigDecimal(total.getText().toString().trim());
+    java.math.BigDecimal purchased=new java.math.BigDecimal(volume.getText().toString().trim());
+    if(paid.signum()<=0||purchased.signum()<=0)throw new IllegalArgumentException("Enter a cost and litres greater than zero");
+    if(paid.compareTo(new java.math.BigDecimal("10000"))>0||purchased.compareTo(new java.math.BigDecimal("1000"))>0)
+     throw new IllegalArgumentException("Please check the amount entered");
+    long cents=paid.movePointRight(2).setScale(0,java.math.RoundingMode.HALF_UP).longValueExact();
+    long milli=purchased.movePointRight(3).setScale(0,java.math.RoundingMode.HALF_UP).longValueExact();
+    if(cents<1||milli<1)throw new IllegalArgumentException("Cost and litres must be greater than zero");
+    String odometerText=odo.getText().toString().trim();
+    Double distance=odometerText.isEmpty()?null:Double.parseDouble(odometerText);
+    if(distance!=null&&(!Double.isFinite(distance)||distance<0||distance>10000000))
+     throw new IllegalArgumentException("Please check the odometer reading");
+    if(chosen.getTimeInMillis()>System.currentTimeMillis()+86400000L)
+     throw new IllegalArgumentException("Fill-up date cannot be in the future");
+    try(TripStore db=new TripStore(this)){db.addFuel(chosen.getTimeInMillis(),cents,milli,distance,station.getText().toString(),full.isChecked());}
+    Toast.makeText(this,"Fuel fill-up saved",Toast.LENGTH_SHORT).show();showFuel();
+   }catch(Exception e){new AlertDialog.Builder(this).setTitle("Check the fill-up").setMessage(e.getMessage()).setPositiveButton("OK",null).show();}
+  });
  }
  @Override void showSettings(){
   screen=3;init("Settings");headerSmall(body,"Preferences","Keep DriveTrack simple and personal");
