@@ -1,12 +1,22 @@
 package com.drivetrack.app;
 import android.content.*;import android.database.*;import android.database.sqlite.*;
 public class TripStore extends SQLiteOpenHelper {
- public TripStore(Context c){super(c,"trips.db",null,4);}
- public void onCreate(SQLiteDatabase db){db.execSQL("CREATE TABLE trips(id INTEGER PRIMARY KEY AUTOINCREMENT,started INTEGER,ended INTEGER,distance REAL,maxspeed REAL,movingms INTEGER,pausedms INTEGER DEFAULT 0,points TEXT,telemetry TEXT,title TEXT,notes TEXT)");}
- public void onUpgrade(SQLiteDatabase db,int a,int b){if(a<2)db.execSQL("ALTER TABLE trips ADD COLUMN pausedms INTEGER DEFAULT 0");if(a<3)db.execSQL("ALTER TABLE trips ADD COLUMN telemetry TEXT");if(a<4){db.execSQL("ALTER TABLE trips ADD COLUMN title TEXT");db.execSQL("ALTER TABLE trips ADD COLUMN notes TEXT");}}
+ public TripStore(Context c){super(c,"trips.db",null,5);}
+ public void onCreate(SQLiteDatabase db){db.execSQL("CREATE TABLE trips(id INTEGER PRIMARY KEY AUTOINCREMENT,started INTEGER,ended INTEGER,distance REAL,maxspeed REAL,movingms INTEGER,pausedms INTEGER DEFAULT 0,points TEXT,telemetry TEXT,title TEXT,notes TEXT)");db.execSQL("CREATE TABLE fuel(id INTEGER PRIMARY KEY AUTOINCREMENT,filled_at INTEGER NOT NULL,amount_cents INTEGER NOT NULL,litres_milli INTEGER NOT NULL,odometer_km REAL,station TEXT,full_tank INTEGER NOT NULL DEFAULT 0)");}
+ public void onUpgrade(SQLiteDatabase db,int a,int b){if(a<2)db.execSQL("ALTER TABLE trips ADD COLUMN pausedms INTEGER DEFAULT 0");if(a<3)db.execSQL("ALTER TABLE trips ADD COLUMN telemetry TEXT");if(a<4){db.execSQL("ALTER TABLE trips ADD COLUMN title TEXT");db.execSQL("ALTER TABLE trips ADD COLUMN notes TEXT");}if(a<5)db.execSQL("CREATE TABLE IF NOT EXISTS fuel(id INTEGER PRIMARY KEY AUTOINCREMENT,filled_at INTEGER NOT NULL,amount_cents INTEGER NOT NULL,litres_milli INTEGER NOT NULL,odometer_km REAL,station TEXT,full_tank INTEGER NOT NULL DEFAULT 0)");}
  public void save(long start,long end,double distance,double max,long moving,long paused,String points,String telemetry){ContentValues v=new ContentValues();v.put("started",start);v.put("ended",end);v.put("distance",distance);v.put("maxspeed",max);v.put("movingms",moving);v.put("pausedms",paused);v.put("points",points);v.put("telemetry",telemetry);getWritableDatabase().insert("trips",null,v);}
  public Cursor all(){return getReadableDatabase().rawQuery("SELECT * FROM trips ORDER BY started DESC",null);}
  public Cursor one(long id){return getReadableDatabase().rawQuery("SELECT * FROM trips WHERE id=?",new String[]{String.valueOf(id)});}
+ public long addFuel(long filledAt,long cents,long milliLitres,Double odometer,String station,boolean full){
+  if(filledAt<=0||cents<=0||milliLitres<=0)throw new IllegalArgumentException("Date, cost and litres must be positive");
+  ContentValues v=new ContentValues();v.put("filled_at",filledAt);v.put("amount_cents",cents);v.put("litres_milli",milliLitres);
+  if(odometer!=null)v.put("odometer_km",odometer);else v.putNull("odometer_km");
+  v.put("station",station==null?"":station.trim());v.put("full_tank",full?1:0);
+  return getWritableDatabase().insertOrThrow("fuel",null,v);
+ }
+ public Cursor fuelAll(){return getReadableDatabase().rawQuery("SELECT * FROM fuel ORDER BY filled_at DESC,id DESC",null);}
+ public void deleteFuel(long id){getWritableDatabase().delete("fuel","id=?",new String[]{String.valueOf(id)});}
+
  public org.json.JSONObject exportAll() throws org.json.JSONException {
   org.json.JSONObject root=new org.json.JSONObject();
   root.put("format","DriveTrack JSON");root.put("version",2);
@@ -27,7 +37,19 @@ public class TripStore extends SQLiteOpenHelper {
     journeys.put(item);
    }
   }
-  root.put("journeys",journeys);return root;
+  root.put("journeys",journeys);
+  org.json.JSONArray fuelEntries=new org.json.JSONArray();
+  try(Cursor c=fuelAll()){while(c.moveToNext()){
+   org.json.JSONObject e=new org.json.JSONObject();
+   for(String key:new String[]{"id","filled_at","amount_cents","litres_milli","odometer_km","station","full_tank"}){
+    int col=c.getColumnIndexOrThrow(key);
+    if(c.isNull(col))e.put(key,org.json.JSONObject.NULL);
+    else if(key.equals("odometer_km"))e.put(key,c.getDouble(col));
+    else if(key.equals("station"))e.put(key,c.getString(col));
+    else e.put(key,c.getLong(col));
+   }fuelEntries.put(e);
+  }}
+  root.put("fuel_entries",fuelEntries);return root;
  }
  public int importDatabase(Context context,android.net.Uri uri) throws Exception {
   java.io.File tmp=java.io.File.createTempFile("drivetrack-import-", ".db",context.getCacheDir());
