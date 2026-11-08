@@ -116,6 +116,46 @@ public class ModernActivity extends MainActivity {
   LinearLayout.LayoutParams q=new LinearLayout.LayoutParams(0,-2,1);q.leftMargin=px(5);row.addView(right,q);
   block(holder,row,-2,10);
  }
+ // Five cohesive 24x24 rounded-stroke navigation icons, no platform emojis.
+ static class NavOutlineIcon extends View {
+  final int type;final Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
+  NavOutlineIcon(Context c,int iconType,int tint){super(c);type=iconType;p.setColor(tint);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(1.85f);p.setStrokeCap(Paint.Cap.ROUND);p.setStrokeJoin(Paint.Join.ROUND);}
+  void line(Canvas c,float x,float y,float a,float b){c.drawLine(x,y,a,b,p);}
+  void circle(Canvas c,float x,float y,float radius){c.drawCircle(x,y,radius,p);}
+  void path(Canvas c,float... xy){Path q=new Path();q.moveTo(xy[0],xy[1]);for(int i=2;i<xy.length;i+=2)q.lineTo(xy[i],xy[i+1]);c.drawPath(q,p);}
+  @Override protected void onDraw(Canvas original){
+   super.onDraw(original);
+   if(getWidth()==0||getHeight()==0)return;
+   Canvas c=original;int save=c.save();
+   float scale=Math.min(getWidth(),getHeight())/24f;
+   c.translate((getWidth()-24*scale)/2f,(getHeight()-24*scale)/2f);c.scale(scale,scale);
+   switch(type){
+    case 0: // Gauge
+     c.drawArc(new RectF(3,3,21,21),145,250,false,p);
+     line(c,6,17,4.7f,18.3f);line(c,18,17,19.3f,18.3f);
+     line(c,12,12.5f,16.4f,8.1f);circle(c,12,12.5f,1.35f);break;
+    case 1: // Route
+     circle(c,5.5f,18,2.1f);circle(c,18.5f,5.5f,2.1f);
+     Path r=new Path();r.moveTo(7.7f,18);r.cubicTo(16.7f,18,6.7f,8,16.3f,5.5f);c.drawPath(r,p);break;
+    case 2: // Bar chart
+     line(c,3.5f,20.5f,20.5f,20.5f);
+     c.drawRoundRect(new RectF(5,12,8,20),.7f,.7f,p);
+     c.drawRoundRect(new RectF(10.5f,7.5f,13.5f,20),.7f,.7f,p);
+     c.drawRoundRect(new RectF(16,3.5f,19,20),.7f,.7f,p);break;
+    case 3: // Petrol pump outline
+     c.drawRoundRect(new RectF(4,3.5f,14.5f,21),1.5f,1.5f,p);
+     c.drawRoundRect(new RectF(6.5f,6.2f,12,11.3f),.7f,.7f,p);
+     line(c,3,21,16,21);line(c,14.5f,8,17.7f,10.5f);
+     Path hose=new Path();hose.moveTo(17.7f,10.5f);hose.cubicTo(20.8f,11.7f,20.5f,14.8f,20.5f,18);hose.cubicTo(20.5f,20,18.4f,20,18.4f,18.2f);c.drawPath(hose,p);
+     path(c,17.7f,10.5f,18.6f,7.4f,20.5f,6.2f);break;
+    default: // Settings gear
+     circle(c,12,12,6.4f);circle(c,12,12,2.5f);
+     for(int i=0;i<8;i++){double angle=Math.PI*i/4;float dx=(float)Math.cos(angle),dy=(float)Math.sin(angle);line(c,12+7.7f*dx,12+7.7f*dy,12+10.3f*dx,12+10.3f*dy);}
+   }
+   c.restoreToCount(save);
+  }
+ }
+
  @Override void init(String title){
   root=vertical();root.setBackgroundColor(ink);
   root.setOnApplyWindowInsetsListener((v,in)->{
@@ -137,22 +177,27 @@ public class ModernActivity extends MainActivity {
   body=vertical();body.setPadding(px(12),0,px(12),0);
   if(title.equals("Dashboard")||title.equals("HUD"))root.addView(body,new LinearLayout.LayoutParams(-1,0,1));
   else{ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.addView(body);root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));}
-  LinearLayout nav=new LinearLayout(this);nav.setPadding(px(10),px(5),px(10),px(7));
-  nav.setBackgroundColor(0xff0b1b29);
-  String[] names={"◉","▤","▥","⛽","⚙"};
+  LinearLayout nav=new LinearLayout(this);
+  nav.setPadding(px(8),px(5),px(8),px(7));nav.setBackgroundColor(0xff0b1b29);
   String[] titles={"Drive","Trips","Stats","Fuel","Settings"};
   int selected=title.equals("Dashboard")||title.equals("HUD")?0:title.equals("History")?1:title.equals("Insights")?2:title.equals("Fuel")?3:4;
-  for(int i=0;i<5;i++){
-   final int index=i;
+  for(int i=0;i<titles.length;i++){
+   final int index=i;boolean activeTab=i==selected;
    LinearLayout item=vertical();item.setGravity(Gravity.CENTER);
-   item.setPadding(px(3),px(3),px(3),px(3));
-   item.setBackground(round(i==selected?0xff193947:0xff0b1b29,14));
-   TextView glyph=label(names[i],21,i==selected?accent:0xff7b9baa);glyph.setGravity(Gravity.CENTER);
-   item.addView(glyph,new LinearLayout.LayoutParams(-1,px(25)));
-   TextView word=label(titles[i],10,i==selected?0xffc6f8ee:muted);word.setTypeface(null,i==selected?1:0);
-   word.setGravity(Gravity.CENTER);item.addView(word,new LinearLayout.LayoutParams(-1,px(17)));
-   LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,px(51),1);lp.setMargins(px(2),0,px(2),0);nav.addView(item,lp);
+   item.setPadding(px(2),px(5),px(2),px(4));
+   GradientDrawable tabBackground=round(activeTab?0xff193d49:0xff0b1b29,14);
+   if(activeTab)tabBackground.setStroke(px(1),0xff24616a);
+   item.setBackground(tabBackground);
+   LinearLayout.LayoutParams imagePlacement=new LinearLayout.LayoutParams(px(27),px(27));
+   imagePlacement.gravity=Gravity.CENTER_HORIZONTAL;imagePlacement.bottomMargin=px(3);
+   item.addView(new NavOutlineIcon(this,index,activeTab?accent:0xff87a4b6),imagePlacement);
+   TextView word=label(titles[i],11,activeTab?0xffc6f8ee:0xffa0b7c6);
+   word.setTypeface(null,activeTab?1:0);word.setGravity(Gravity.CENTER);
+   item.addView(word,new LinearLayout.LayoutParams(-1,px(19)));
+   LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,px(62),1);
+   lp.setMargins(px(2),0,px(2),0);nav.addView(item,lp);
    item.setClickable(true);item.setFocusable(true);item.setContentDescription(titles[i]+" tab");
+   if(Build.VERSION.SDK_INT>=26)item.setTooltipText(titles[i]);
    item.setOnClickListener(v->{
     if(index==0)showDashboard();else if(index==1)showHistory();else if(index==2)showInsights();else if(index==3)showFuel();else showSettings();
    });
