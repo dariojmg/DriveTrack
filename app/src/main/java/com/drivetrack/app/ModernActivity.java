@@ -162,12 +162,14 @@ public class ModernActivity extends MainActivity {
  void goBackFrom(String title){
   if(title.equals("Replay"))showDetail(selectedId);
   else if(title.equals("Details"))showHistory();
+   else if(title.equals("Fuel entry"))showFuel();
   else if(title.equals("Insights"))showHistory();
   else if(title.equals("HUD")){getPreferences(0).edit().putBoolean("hud",false).apply();showDashboard();}
   else showDashboard();
  }
  @Override public void onBackPressed(){
-  if(screen==2||screen==5)showHistory();
+  if(screen==8)showFuel();
+   else if(screen==2||screen==5)showHistory();
   else if(screen==4){getPreferences(0).edit().putBoolean("hud",false).apply();showDashboard();}
   else super.onBackPressed();
  }
@@ -780,6 +782,21 @@ public class ModernActivity extends MainActivity {
   twoStats(body,"JOURNEYS",""+count,"TOTAL DISTANCE",dist(metres));
   twoStats(body,"DRIVE TIME",insightDuration(duration),"TOP SPEED",speed(highest));
   twoStats(body,"AVG JOURNEY",dist(count==0?0:metres/count),"LONGEST",dist(longest));
+  headerSmall(body,"Fuel and running costs","Purchases recorded in the Fuel tab");
+  long petrolCents=0,petrolMilli=0;int petrolEntries=0;
+  try(TripStore db=new TripStore(this);Cursor c=db.fuelAll()){
+   while(c.moveToNext()){
+    petrolCents+=c.getLong(c.getColumnIndexOrThrow("amount_cents"));
+    petrolMilli+=c.getLong(c.getColumnIndexOrThrow("litres_milli"));petrolEntries++;
+   }
+  }
+  if(petrolEntries==0)block(body,label("No petrol purchases yet. Use the Fuel tab to record your first fill-up.",13,muted),-2,12);
+  else{
+   twoStats(body,"TOTAL FUEL SPEND",euro(petrolCents),"FUEL PURCHASED",litreAmount(petrolMilli));
+   double[] economy=latestFuelEconomy();
+   if(economy==null)block(body,label("Add two full-tank odometer readings to calculate fuel efficiency and cost per kilometre.",12,muted),-2,12);
+   else twoStats(body,"CONSUMPTION",String.format(Locale.getDefault(),"%.1f L/100km",economy[0]),"FUEL COST / KM",String.format(Locale.getDefault(),"€%.3f",economy[1]));
+  }
   headerSmall(body,"Speed insights","Speed samples from your recorded journeys");
   ArrayList<Float> journeyAverages=new ArrayList<>();float[] speedBuckets=new float[6];
   int reviewCount=0,unavailableCount=0;
@@ -1087,6 +1104,27 @@ public class ModernActivity extends MainActivity {
   label.setLetterSpacing(.1f);block(parent,label,-2,9);
  }
 
+ // Full-to-full efficiency: include all partial refills between complete odometer readings.
+ double[] latestFuelEconomy(){
+  double firstOdo=Double.NaN,litres=0,cost=0;double[] result=null;
+  try(TripStore db=new TripStore(this);Cursor c=db.getReadableDatabase().rawQuery("SELECT odometer_km,full_tank,litres_milli,amount_cents FROM fuel ORDER BY filled_at ASC,id ASC",null)){
+   while(c.moveToNext()){
+    boolean full=c.getInt(1)==1;double odometer=c.isNull(0)?Double.NaN:c.getDouble(0);
+    if(Double.isNaN(firstOdo)){
+     if(full&&!Double.isNaN(odometer)){firstOdo=odometer;litres=0;cost=0;}
+     continue;
+    }
+    litres+=c.getLong(2)/1000d;cost+=c.getLong(3)/100d;
+    if(full&&!Double.isNaN(odometer)){
+     double distance=odometer-firstOdo;
+     if(distance>=20&&distance<=3000&&litres>0&&litres<=300)
+      result=new double[]{100*litres/distance,cost/distance,distance};
+     firstOdo=odometer;litres=0;cost=0;
+    }
+   }
+  }catch(Exception ignored){}
+  return result;
+ }
  String euro(long cents){return String.format(Locale.getDefault(),"€%,.2f",cents/100d);}
  String litreAmount(long milli){return String.format(Locale.getDefault(),"%.2f L",milli/1000d);}
  EditText fuelInput(String hint,String existing,boolean number){
@@ -1112,6 +1150,12 @@ public class ModernActivity extends MainActivity {
   }catch(Exception e){block(body,label("Fuel records unavailable: "+e.getMessage(),13,0xffffbb79),-2,8);}
   twoStats(body,"TOTAL FUEL SPEND",euro(allCents),"THIS MONTH",euro(monthCents));
   twoStats(body,"FUEL PURCHASED",litreAmount(allMilli),"FILL-UPS",""+entries);
+  double[] economy=latestFuelEconomy();
+  if(economy!=null){
+   twoStats(body,"FULL-TO-FULL",String.format(Locale.getDefault(),"%.1f L/100km",economy[0]),
+    "FUEL COST / KM",String.format(Locale.getDefault(),"€%.3f",economy[1]));
+   block(body,label("Latest complete odometer fill-up interval: "+String.format(Locale.getDefault(),"%.0f km",economy[2])+". Not a measured cost for individual GPS journeys.",12,muted),-2,12);
+  }
   Button add=button("＋  Add petrol fill-up",0xff087f79);block(body,add,px(58),14);
   add.setOnClickListener(v->showFuelEntry());
   block(body,label("Enter cost and litres to start. Odometer is optional; fuel efficiency becomes available with full-to-full readings.",12,muted),-2,17);
