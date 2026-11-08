@@ -696,6 +696,9 @@ public class ModernActivity extends MainActivity {
    Button mapFallback=button("Show offline GPS trace",surface);block(body,mapFallback,px(42),12);
    mapFallback.setOnClickListener(v->{mapFrame.removeAllViews();mapFrame.addView(new RouteView(this,coords),new FrameLayout.LayoutParams(-1,-1));});
    twoStats(body,"DISTANCE",dist(metres),"TOP SPEED",speed(max));
+   double[] fuelEconomy=latestFuelEconomy();
+   if(fuelEconomy!=null)
+    block(body,label("Estimated petrol cost: "+euro(Math.round((metres/1000d)*fuelEconomy[1]*100))+" · based on your latest full-to-full fuel rate, not measured consumption for this journey.",12,muted),-2,12);
    long effective=Math.max(0,ended-started-pause);
    twoStats(body,"ACTIVE TIME",insightDuration(effective),"MOVING AVG",speed(metres/Math.max(1,moving/1000d)));
    twoStats(body,"TOTAL ELAPSED",insightDuration(Math.max(0,ended-started)),"PAUSED",insightDuration(pause));
@@ -1253,9 +1256,9 @@ public class ModernActivity extends MainActivity {
   Button display=button("Minimal speedometer / HUD   ›",surface);block(body,display,px(52),10);
   display.setOnClickListener(v->{getPreferences(0).edit().putBoolean("hud",true).apply();showDashboard();});
   sectionLabel(body,"DATA & BACKUP");
-  Button export=button("Export all journeys to JSON",surface);block(body,export,px(52),10);export.setOnClickListener(v->exportJourneys());
-  Button restore=button("Restore journeys from .db backup",surface);block(body,restore,px(52),12);restore.setOnClickListener(v->importJourneys());
-  block(body,label("Build "+BuildConfig.VERSION_NAME+" · GPS signal age is monitored. Export before changing phones. Backup files may contain precise locations.",13,muted),-2,18);
+  Button export=button("Export journeys + fuel to JSON",surface);block(body,export,px(52),10);export.setOnClickListener(v->exportJourneys());
+  Button restore=button("Restore journeys + fuel from .db backup",surface);block(body,restore,px(52),12);restore.setOnClickListener(v->importJourneys());
+  block(body,label("Build "+BuildConfig.VERSION_NAME+" · Fuel and journeys are stored together. Export your data before changing phones. Backups may contain precise locations and fuel spending.",13,muted),-2,18);
   sectionLabel(body,"DATA MANAGEMENT");
   Button cleanup=button("Remove accidental zero-distance entries",surface);block(body,cleanup,px(50),10);
   cleanup.setOnClickListener(v->{
