@@ -745,11 +745,11 @@ public class ModernActivity extends MainActivity {
    if(fuelEconomy!=null)
     block(body,label("Estimated petrol cost: "+euro(Math.round((metres/1000d)*fuelEconomy[1]*100))+" · based on your latest full-to-full fuel rate, not measured consumption for this journey.",12,muted),-2,12);
    long effective=Math.max(0,ended-started-pause);
-   twoStats(body,"ACTIVE TIME",insightDuration(effective),"MOVING AVG",speed(metres/Math.max(1,moving/1000d)));
-   twoStats(body,"TOTAL ELAPSED",insightDuration(Math.max(0,ended-started)),"PAUSED",insightDuration(pause));
+   twoStats(body,"ACTIVE TIME",exactDuration(effective),"MOVING AVG",speed(metres/Math.max(1,moving/1000d)));
+   twoStats(body,"TOTAL ELAPSED",exactDuration(Math.max(0,ended-started)),"PAUSED",exactDuration(pause));
    LinearLayout technical=vertical();
-   twoStats(technical,"OVERALL AVG",speed(metres/Math.max(1,effective/1000d)),"STOPPED",insightDuration(Math.max(0,effective-moving)));
-   twoStats(technical,"MOVING",insightDuration(moving),"GPS POINTS",String.valueOf(coords.length()));
+   twoStats(technical,"OVERALL AVG",speed(metres/Math.max(1,effective/1000d)),"STOPPED",exactDuration(Math.max(0,effective-moving)));
+   twoStats(technical,"MOVING",exactDuration(moving),"GPS POINTS",String.valueOf(coords.length()));
    Button detailToggle=button("Technical details   ⌄",surface);block(body,detailToggle,px(44),8);
    technical.setVisibility(View.GONE);block(body,technical,-2,5);
    detailToggle.setOnClickListener(v->{boolean opening=technical.getVisibility()!=View.VISIBLE;
@@ -758,7 +758,15 @@ public class ModernActivity extends MainActivity {
    });
    String telemetry=c.getString(c.getColumnIndexOrThrow("telemetry"));
    try{JSONArray samples=new JSONArray(telemetry==null?"[]":telemetry);
-    block(technical,label(samples.length()==0?"GPS diagnostics unavailable for this older journey":"GPS diagnostics: "+samples.length()+" speed samples",13,muted),-2,9);
+    int speedCount=0,pauseCount=0;
+    for(int i=0;i<samples.length();i++){
+     JSONArray row=samples.optJSONArray(i);
+     if(row==null)continue;
+     if("pause".equals(row.optString(0,"")))pauseCount++;
+     else if(row.length()>=3&&row.optLong(0,0)>0)speedCount++;
+    }
+    String sampleDescription=speedCount==0?"GPS diagnostics unavailable for this older journey":"GPS diagnostics: "+speedCount+" speed readings"+(pauseCount>0?" · "+pauseCount+" pause event"+(pauseCount==1?"":"s"):"");
+    block(technical,label(sampleDescription,13,muted),-2,9);
      if(samples.length()>2){
       block(body,label("SPEED THROUGHOUT JOURNEY",12,muted),-2,7);
       block(body,new JourneySpeedTimeline(this,samples,started,ended,pause),px(218),10);
@@ -806,6 +814,14 @@ public class ModernActivity extends MainActivity {
   new AlertDialog.Builder(this).setTitle("Journey details").setView(form).setNegativeButton("Cancel",null).setPositiveButton("Save",(d,w)->{
    try(TripStore store=new TripStore(this)){store.rename(id,name.getText().toString().trim(),memo.getText().toString().trim());}showDetail(id);
   }).show();
+ }
+ // Exact duration for saved journey details; compact formatting elsewhere remains unchanged.
+ String exactDuration(long ms){
+  long seconds=Math.max(0,ms/1000),days=seconds/86400,hours=seconds/3600%24,minutes=seconds/60%60,secs=seconds%60;
+  if(days>0)return days+"d "+hours+"h "+minutes+"m "+secs+"s";
+  if(seconds>=3600)return (seconds/3600)+"h "+minutes+"m "+secs+"s";
+  if(seconds>=60)return (seconds/60)+"m "+secs+"s";
+  return secs+"s";
  }
  String insightDuration(long ms){
   long minutes=Math.max(0,ms/60000),days=minutes/1440,hours=minutes/60%24,mins=minutes%60;
